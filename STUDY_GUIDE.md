@@ -1,0 +1,239 @@
+# CodeEmbed — Comprehensive Study & Revision Guide
+
+> **Purpose**: A step-by-step companion guide explaining the *what*, *why*, and *how* behind every script, architectural decision, formula, and bug fix in this project. Use this for revision, deep understanding, and interview/portfolio preparation.
+
+---
+
+## Table of Contents
+1. [The Big Picture: What Are We Building?](#1-the-big-picture-what-are-we-building)
+2. [Phase 0.1: Environment & Tooling Choices](#2-phase-01-environment--tooling-choices)
+3. [Phase 0.2: Data Download & Preprocessing Pipeline](#3-phase-02-data-download--preprocessing-pipeline)
+4. [Phase 0.3: Tokenization & Byte-Pair Encoding (BPE)](#4-phase-03-tokenization--byte-pair-encoding-bpe)
+5. [Key Bugs Encountered & Lessons Learned](#5-key-bugs-encountered--lessons-learned)
+6. [Roadmap: What's Next?](#6-roadmap-whats-next)
+
+---
+
+## 1. The Big Picture: What Are We Building?
+
+### The Core Problem: Semantic Code Search
+When developers search for code, lexical search (keyword matching like `Ctrl+F` or classic search engines) often fails because natural language descriptions and code use completely different vocabularies:
+* **User Query**: `"find euclidean distance between two vectors"`
+* **Code Implementation**:
+  ```python
+  def l2_norm(p1, p2):
+      return sum((a - b) ** 2 for a, b in zip(p1, p2)) ** 0.5
+  ```
+Notice that the words `"euclidean"`, `"distance"`, and `"vectors"` do not appear anywhere in the function body. A keyword search scores this as a zero match.
+
+### The Solution: Contrastive Dual-Space Embedding
+We train a Transformer encoder to map:
+* A natural language docstring $\rightarrow$ a 256-dimensional vector $\mathbf{z}_{\text{text}} \in \mathbb{R}^{256}$
+* A Python function $\rightarrow$ a 256-dimensional vector $\mathbf{z}_{\text{code}} \in \mathbb{R}^{256}$
+
+Both vectors are normalized to the unit hypersphere ($\|\mathbf{z}\|_2 = 1$). During training via **InfoNCE contrastive loss**, we pull matching pairs together (maximizing cosine similarity $\mathbf{z}_{\text{text}}^\top \mathbf{z}_{\text{code}}$) while pushing non-matching pairs apart.
+
+```
+ Natural Language: "calculate l2 distance" ──────► [Text Encoder] ────► z_text (256-d)
+                                                                             │
+                                                                   Maximize Cosine Sim
+                                                                             │
+ Code Snippet:     "def l2_norm(p1, p2): ..." ───► [Code Encoder] ────► z_code (256-d)
+```
+
+At retrieval time, all codebase functions are pre-encoded into a **FAISS** vector index. When a user enters a query, we encode only the query and perform a fast nearest-neighbor search ($<50\text{ms}$).
+
+---
+
+## 2. Phase 0.1: Environment & Tooling Choices
+
+### Why `uv` Instead of Traditional `pip`?
+* Traditional `pip` resolves dependencies sequentially in Python and can take minutes.
+* `uv` is written in Rust, resolving and installing wheels in milliseconds using global caching and hard links.
+* We manage dependencies inside a project-isolated `.venv`.
+
+### Why Explicit CUDA Wheels on Windows?
+* Standard PyPI distributions of `torch` on Windows may default to CPU-only if NVIDIA CUDA runtimes are not bundled.
+* Specifying `--index-url https://download.pytorch.org/whl/cu124` downloads the complete PyTorch binaries compiled with CUDA 12.4 kernels, enabling hardware acceleration on your GPU.
+
+### Why `.gitignore` Is Vital for ML
+* Parquet files, raw datasets, model weights (`.pt`), and MLflow experiment runs take gigabytes of disk space.
+* Git is designed for text diffs, not large binaries. Committing `.pt` files would permanently bloat git history.
+
+---
+
+## 3. Phase 0.2: Data Download & Preprocessing Pipeline
+
+### 3.1 `data/download.py` — Downloading the Raw Corpus
+* **Dataset**: CodeSearchNet (Python subset).
+* **Why Save to Disk as Parquet?**
+  * `Parquet` is a columnar storage format with Snappy compression.
+  * Reading raw Parquet into Pandas is ~5–10x faster than parsing JSON lines or CSV.
+  * It decouples downloading from experimentation: if we want to change preprocessing rules later, we never have to re-download 1 GB over the network.
+
+### 3.2 `data/preprocess.py` — Cleaning the Data
+Real-world code scraped from GitHub is full of noise that harms representation learning:
+1. **Empty / Missing Content**: Functions without docstrings or empty bodies provide no contrastive supervision signal.
+2. **Length Filtering (10 to 2048 words/tokens)**:
+   * Tiny snippets (e.g., `pass`, `return True`) lack semantic meaning.
+   * Massive functions (> 2048 tokens) cause GPU Out-of-Memory (OOM) errors during self-attention, where memory scales quadratically: $\mathcal{O}(L^2)$.
+3. **Meaningless Docstrings**: Filtering out placeholders like `"TODO"`, `"None"`, or single-word descriptions that don't explain functionality.
+4. **Boilerplate & Autogenerated Files**: Dropping `__init__.py` files and `/migrations/` which contain repetitive import statements rather than logical code.
+5. **Exact Deduplication**: GitHub contains thousands of identical forked functions (e.g. copied utilities). If an identical function exists in both train and test sets, the model can simply memorize it (**data leakage**). Deduplication prevents this.
+
+#### Preprocessing Results:
+* **Train**: 412,178 $\rightarrow$ **385,381** clean functions (~26.8k noisy samples dropped).
+* **Validation**: 23,107 $\rightarrow$ **21,585** clean functions.
+* **Test**: 22,176 $\rightarrow$ **21,005** clean functions.
+* Disk footprint reduced from **~950 MB** down to **~223 MB**!
+
+---
+
+## 4. Phase 0.3: Tokenization & Byte-Pair Encoding (BPE)
+
+### 4.1 Why Not Character or Word-Level Tokenization?
+* **Word-level**: Python has infinite compound variable names (`get_user_account_by_id`). A word-level vocabulary would require millions of entries, exploding embedding table size ($V \times D$).
+* **Character-level**: Sequences would become thousands of tokens long, exceeding our sequence length limit ($L=256$) and making self-attention extremely slow.
+* **Byte-Pair Encoding (BPE)**: The optimal middle ground.
+  * Starts at the byte/character level (meaning it **never** encounters an unseen word—it can always fall back to individual characters).
+  * Iteratively merges the most frequent adjacent character pairs into subwords until reaching our target vocabulary size (**16,000 subwords**).
+  * Example: `calculate_loss_matrix` $\rightarrow$ `['calculate', '_loss', '_matrix']`.
+
+### 4.2 Why Train on BOTH Code and Docstrings?
+Our goal is to map code and docstrings into the **same shared embedding space**. If we trained two separate tokenizers:
+* The word `"vector"` in a docstring might get token ID `512`.
+* The word `"vector"` in code might get token ID `1048`.
+By training a single unified BPE vocabulary over both modalities, shared programming and domain terms share the exact same embedding row from day one!
+
+### 4.3 Special Tokens
+We reserve IDs 0 through 5 for structural control tokens:
+* `<PAD>` (ID 0): Fills shorter sequences up to the batch length. The attention mask sets attention weights to $-\infty$ for `<PAD>` tokens so the model ignores them.
+* `<UNK>` (ID 1): Fallback for any character byte sequence not represented.
+* `<BOS>` (ID 2): Beginning of Sequence marker.
+* `<EOS>` (ID 3): End of Sequence marker.
+* `<CODE>` (ID 4): Modality token prepended when encoding Python code.
+* `<TEXT>` (ID 5): Modality token prepended when encoding natural language queries.
+
+### 4.4 The Tokenizer Wrapper (`tokenizer/tokenizer.py`) & PyTorch Tensor Mechanics
+The raw Hugging Face `tokenizers` library returns plain Python lists and metadata objects (`Encoding`). But deep learning models implemented in PyTorch require structured multi-dimensional tensors. `tokenizer/tokenizer.py` bridges this gap.
+
+#### The Two Essential Tensors:
+1. **`input_ids`**: Shape $(B, L)$ where $B$ is batch size and $L$ is sequence length.
+   * A 2D matrix of 64-bit integers (`torch.long`).
+   * Each integer is an index into the model's token embedding lookup matrix $\mathbf{E} \in \mathbb{R}^{V \times D}$ (where $V=16000$ and $D=256$).
+   * Example row: `[356, 3661, 68, 4794, 0, 0, 0, ...]`
+2. **`attention_mask`**: Shape $(B, L)$
+   * A binary mask containing `1` for real subword tokens and `0` for `<PAD>` tokens.
+   * **Why is this necessary?** In the Transformer's Multi-Head Self-Attention layer:
+     $$\text{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \text{Softmax}\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}} + \mathbf{M}\right)\mathbf{V}$$
+     Where the mask $\mathbf{M}_{i, j} = -\infty$ whenever position $j$ has an attention mask of `0`. Because $e^{-\infty} = 0$, the softmax allocates **zero** attention weight to padding tokens, ensuring pad tokens never contaminate real representations.
+
+#### Truncation & Padding Strategy:
+* **Truncation (`max_length=256`)**: Python functions can theoretically be thousands of lines long. Self-attention complexity scales quadratically with length $\mathcal{O}(L^2)$. Capping sequences at $L=256$ keeps GPU memory predictable and fast while retaining ~95% of all function code.
+* **Padding (`pad_id=0`)**: PyTorch batches must be rectangular tensors. If sequence 1 has 50 tokens and sequence 2 has 120 tokens, sequence 1 is padded with 70 `<PAD>` tokens so both can be processed in parallel on the GPU in a single $(2, 120)$ tensor.
+
+#### Modality Token Prepending (`<CODE>` vs. `<TEXT>`):
+In multi-modal code retrieval, prepending `<CODE>` or `<TEXT>` informs the Transformer whether it is encoding a Python function or an English query. Because `<CODE>` and `<TEXT>` were registered as added special tokens during BPE training, prepending `"<CODE> "` or `"<TEXT> "` directly produces token ID `4` or `5` as the first token without subword fragmentation.
+
+#### 1D vs. 2D Tensor Decoding:
+* **1D Tensor `(L,)`**: Represents a single encoded function or query. `token_ids.tolist()` produces `List[int]`, so `token_ids[0]` is an `int`. We call `tokenizer.decode(...)` to return a single `str`.
+* **2D Tensor `(B, L)`**: Represents a batch of sequences. `token_ids.tolist()` produces `List[List[int]]`, so `token_ids[0]` is a `list`. We call `tokenizer.decode_batch(...)` to return a `List[str]`.
+
+### 4.5 Token Length Distribution & Sequence Length Selection
+A critical hyperparameter in any Transformer model is the maximum sequence length $L$. 
+
+#### The Quadratic Memory Penalty of Attention:
+The self-attention mechanism computes an attention score between every token and every other token:
+$$\mathbf{A} = \text{Softmax}\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}\right) \in \mathbb{R}^{B \times H \times L \times L}$$
+Because memory scales as $\mathcal{O}(L^2)$:
+* $L = 512$ uses **$4\times$ more memory** and compute than $L = 256$.
+* $L = 1024$ uses **$16\times$ more memory** than $L = 256$.
+
+#### Why We Measure Percentiles ($P_{50}, P_{75}, P_{90}, P_{95}, P_{99}$):
+* **$P_{50}$ (Median)**: Half of the code samples in the dataset are shorter than this length.
+* **$P_{95}$ (95th Percentile)**: 95% of all samples are shorter than this length.
+
+#### Empirical Findings on CodeSearchNet Python (50,000 Sample EDA):
+| Metric | Docstrings (Text) | Code (Python) |
+|---|---|---|
+| **Mean** | 69.2 tokens | 267.8 tokens |
+| **P50 (Median)** | 34 tokens | 169 tokens |
+| **P75** | 78 tokens | 304 tokens |
+| **P90** | 156 tokens | 539 tokens |
+| **P95** | 240 tokens | 778 tokens |
+| **P99** | 559 tokens | 1,672 tokens |
+
+* **Docstring Coverage at $L=256$**: **$>95\%$** of all docstrings fit completely without any truncation.
+* **Code Coverage at $L=256$**: **$68.7\%$** of functions fit completely.
+
+#### The Architectural Decision: $L=256$ vs. $L=512$
+Why not increase to $L=512$ to reach $89\%$ code coverage?
+1. **Quadratic Memory Penalty**: Attention memory quadruples ($4\times$).
+2. **In-Batch Negatives in InfoNCE**: Contrastive learning calculates similarity against $B-1$ in-batch negatives. Pushing to $L=512$ forces shrinking batch size from $B=256$ down to $B=64$, giving the model $4\times$ fewer negative contrastive examples per gradient step.
+3. Therefore, $L=256$ provides the optimal balance of rich semantic context and high contrastive batch diversity.
+
+### 4.6 PyTorch Dataset, DataLoaders, and Dynamic Padding
+In deep learning training pipelines, the data loader must feed batches of tensors `(B, L)` efficiently without stalling the GPU.
+
+#### Why Do We Need `data/dataset.py` When We Already Have `tokenizer.py`?
+* **`tokenizer.py` is the Tool**: A pure transformation function (`text -> token_ids`). It does not know about disks, Parquet files, epochs, shuffling, or GPU memory transfers.
+* **`data/dataset.py` is the Assembly Line**: It connects the 200 MB Parquet file on disk to the training loop. It coordinates:
+  1. **Random Access (`Dataset.__getitem__`)**: Grabbing sample `#idx` on demand.
+  2. **Preventing GPU Starvation**: Using background worker threads (`num_workers`) and pinned memory (`pin_memory=True`) so while the GPU trains on batch $N$, CPU threads are already reading batch $N+1$.
+  3. **Epoch Shuffling**: Shuffling sample pairings every epoch so the contrastive model sees diverse negative pairs.
+
+#### Static Padding vs. Dynamic Padding:
+* **Static Padding**: Every sequence in the entire dataset is padded to the global `max_length = 256`.
+  * *Problem*: If a batch contains functions where the longest is only 80 tokens, 176 tokens per sequence ($68\%$) are wasted `<PAD>` tokens! The GPU spends more time doing matrix multiplications on zeros than learning real code.
+* **Dynamic Padding (in Collator)**:
+  * The dataset returns raw strings.
+  * The `Collator` inspects each batch and pads only to the **longest sequence in that specific batch** (capped at `max_length = 256`).
+  * If a batch's longest function is 95 tokens, the batch tensor shape is $(B, 95)$ instead of $(B, 256)$, cutting GPU memory and forward/backward time by more than half!
+
+#### The PyTorch Architecture:
+```
+data/processed/train.parquet
+         │
+         ▼
+  [CodeSearchDataset] ──► Returns raw sample dict: {"code": str, "docstring": str}
+         │
+         ▼
+ [CodeSearchCollator] ──► Dynamically pads batch to max_len_in_batch using Tokenizer
+         │
+         ▼
+      Batches: {
+          "code_ids":  (B, L_code),
+          "code_mask": (B, L_code),
+          "text_ids":  (B, L_text),
+          "text_mask": (B, L_text),
+      }
+```
+
+---
+
+## 5. Key Bugs Encountered & Lessons Learned
+
+| Bug / Error | Root Cause | Solution | Concept Learned |
+|---|---|---|---|
+| `HfUriError: Repository id must be namespace/name` | Modern HuggingFace API requires organization namespaces for legacy dataset names. | Changed `"code_search_net"` to `"code-search-net/code_search_net"`. | HuggingFace Hub repository naming convention. |
+| `trust_remote_code is not supported anymore` | Dataset was converted to standard Parquet, deprecating custom loading scripts. | Removed `trust_remote_code=True` parameter. | Modern datasets use native Parquet without arbitrary code execution. |
+| `ValueError: The truth value of a Series is ambiguous` | Using Python's logical `and` between two Pandas Series objects. | Use bitwise element-wise `&` operator (or rely on `.apply()` functions). | Pandas Series vectorization vs. Python scalar boolean logic. |
+| Batch slice `df.iloc[i+1 : i+batch_size]` | `iloc[start:stop]` start is already inclusive. Using `i+1` skipped row 0 and the first row of each chunk. | Changed to `df.iloc[i : i + batch_size]`. | Python 0-indexed slicing semantics. |
+| Round-trip mismatch on token decoding (`Ġdef`) | `ByteLevel(add_prefix_space=True)` prepends an artificial space to the first token. | Set `add_prefix_space=False` and attach `decoders.ByteLevel()`. | In Python, spaces represent indentation syntax. Adding accidental leading spaces corrupts code formatting. |
+| `ModuleNotFoundError: No module named 'tokenziers'` | Typo in import statement (`tokenziers` vs `tokenizers`). | Corrected spelling to `tokenizers`. | Package naming accuracy. |
+| `ModuleNotFoundError: No module named 'tokenizer'` when running `python data/dataset.py` | Direct script execution puts `data/` in `sys.path[0]`, so Python looks for `tokenizer` inside `data/`. | Run with module flag: `python -m data.dataset`. | Python import resolution (`sys.path[0]`) and package execution (`-m`). |
+
+---
+
+## 6. Roadmap: What's Next?
+
+1. **`tokenizer/tokenizer.py`**: Build a clean Python class wrapper around `tokenizer.json` that:
+   * Encodes strings into PyTorch tensors (`input_ids`, `attention_mask`).
+   * Handles dynamic padding and truncation to `max_length=256`.
+   * Automatically adds `<BOS>`, `<EOS>`, `<CODE>`, or `<TEXT>` tokens.
+2. **Phase 0.4: Token Length Distribution & EDA**:
+   * Inspect token length percentiles ($P_{50}, P_{90}, P_{95}, P_{99}$) on both code and text to mathematically validate our `max_seq_len = 256` choice.
+3. **Phase 1: BM25 Lexical Baseline**:
+   * Build a keyword search baseline to establish the minimum score our neural model must beat.
+   * Implement **MRR** (Mean Reciprocal Rank), **Recall@K**, and **NDCG** from scratch.
+
