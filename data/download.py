@@ -1,6 +1,6 @@
 from pathlib import Path
-from datasets import load_dataset
 
+from datasets import load_dataset
 
 RAW_DATA_DIR=Path("data/raw")
 
@@ -17,7 +17,7 @@ def download_codesearchnet(output_dir: Path=RAW_DATA_DIR,language: str="python")
     
     dataset=load_dataset("code-search-net/code_search_net",language,trust_remote_code=True)
     
-    for split in dataset.keys():
+    for split in dataset:
         print(f"Saving {split}")
         dataset[split].to_parquet(output_dir / f"{split}.parquet")
     

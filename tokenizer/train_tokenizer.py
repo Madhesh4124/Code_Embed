@@ -1,7 +1,14 @@
 from pathlib import Path
-import pandas as pd
-from tokenizers import Tokenizer,models,normalizers,pre_tokenizers,trainers,decoders
 
+import pandas as pd
+from tokenizers import (
+    Tokenizer,
+    decoders,
+    models,
+    normalizers,
+    pre_tokenizers,
+    trainers,
+)
 
 TRAIN_DATA_DIR=Path("data/processed/train.parquet")
 TOKENIZER_DIR=Path("tokenizer")

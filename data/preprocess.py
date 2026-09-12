@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import pandas as pd
 
 RAW_DIR=Path("data/raw")
@@ -21,10 +22,7 @@ def is_valid_docstring(docstring :str) -> bool:
     words=doc.split()
     if len(words)<3:
         return False
-    if doc.lower() in {"todo","none","pass","fixme"}:
-        return False
-    
-    return True
+    return doc.lower() not in {"todo", "none", "pass", "fixme"}
 
 
 

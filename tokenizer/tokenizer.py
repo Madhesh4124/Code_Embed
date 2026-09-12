@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List,Union,Dict
+
 import torch
 from tokenizers import Tokenizer
 
@@ -11,7 +11,7 @@ class CodeEmbedTokenizer:
     
     """wrapper around tokenizer.Tokenizer providing tensor output"""
     
-    def __init__(self,tokenizer_path: Union[str,Path]=DEFAULT_TOKENIZER_PATH):
+    def __init__(self,tokenizer_path: str | Path=DEFAULT_TOKENIZER_PATH):
         self.tokenizer = Tokenizer.from_file(str(tokenizer_path))
         
         #Token IDs
@@ -26,12 +26,12 @@ class CodeEmbedTokenizer:
         
     def encode(
         self,
-        texts: Union[str,List[str]],
+        texts: str | list[str],
         max_length: int =256,
         padding: bool =True,
         truncation: bool =True,
-        modality: str =None  #"code" "text" or None
-    ) -> Dict[str,torch.Tensor]:
+        modality: str | None = None,  # "code" "text" or None
+    ) -> dict[str, torch.Tensor]:
         
         """Encode string or list of strings into pytorch tensors.
         
@@ -82,9 +82,9 @@ class CodeEmbedTokenizer:
     
     def decode(
         self,
-        token_ids: Union[List[int],torch.Tensor],
+        token_ids: list[int] | torch.Tensor,
         skip_special_tokens: bool =True
-    ) -> Union[str,List[str]]:
+    ) -> str | list[str]:
         
         """Decode token IDs back to string"""
         

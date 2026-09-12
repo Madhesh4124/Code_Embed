@@ -1,11 +1,10 @@
 from pathlib import Path
-from typing import List, Optional, Dict,Union
+
 import pandas as pd
 import torch
-from torch.utils.data import Dataset,DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from tokenizer.tokenizer import CodeEmbedTokenizer
-
 
 PROCESSED_DIR=Path("data/processed")
 
@@ -15,7 +14,7 @@ class CodeSearchDataset(Dataset):
     Pytorch Dataset loading CodeSearchNet processes parquet splits.
     """
     
-    def __init__(self, parquet_path: Union[str,Path]):
+    def __init__(self, parquet_path: str | Path):
         self.parquet_path=Path(parquet_path)
         
         if not self.parquet_path.exists():
@@ -27,12 +26,12 @@ class CodeSearchDataset(Dataset):
     def __len__(self) -> int:
         return len(self.df)
     
-    def __getitem__(self, idx: int) -> Dict[str,str]:
+    def __getitem__(self, idx: int) -> dict[str,str]:
         row=self.df.iloc[idx]
         return {
             "code":row["code"],
             "docstring":row["docstring"],
-            "func_name":row["func_name"] if "func_name" in row else ""
+            "func_name": row.get("func_name", "")
         }
             
 
@@ -52,7 +51,7 @@ class CodeSearchCollator:
         self.padding=padding
         
         
-    def __call__(self,batch: List[Dict[str,str]]) -> Dict[str,torch.Tensor]:
+    def __call__(self,batch: list[dict[str,str]]) -> dict[str,torch.Tensor]:
         codes = [item["code"] for item in batch]
         docstrings = [item["docstring"] for item in batch]
         func_names = [item["func_name"] for item in batch]
@@ -92,7 +91,7 @@ def create_dataloader(
     shuffle: bool =True,
     max_length: int = 256,
     num_workers: int =0,
-    tokenizer: Optional[CodeEmbedTokenizer] =None,
+    tokenizer: CodeEmbedTokenizer | None =None,
 ) -> DataLoader:
     
     """

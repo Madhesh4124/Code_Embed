@@ -1,0 +1,24 @@
+# Configuration for Phase 1: BM25 Lexical Baseline Evaluation
+
+data:
+  test_path: "data/processed/test.parquet"
+  # Set sample_size to an integer (e.g. 1000) for fast evaluation, or null to evaluate all 21,005 test queries
+  sample_size: 1000
+  seed: 42
+
+bm25:
+  k1: 1.5
+  b: 0.75
+  save_index: false
+  index_path: "indices/bm25_test.pkl"
+
+evaluation:
+  top_k: 10
+  bootstrap_resamples: 1000
+  confidence_level: 0.95
+
+mlflow:
+  tracking_uri: "mlruns"
+  experiment_name: "CodeEmbed-Baseline"
+  run_name: "BM25-Lexical"
+

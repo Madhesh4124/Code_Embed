@@ -11,15 +11,15 @@
 | Project Setup | 🟢 Completed | 2026-09-07 | Folder tree, .gitignore, requirements.txt, and local .venv with uv & CUDA 12.4 |
 | Data Pipeline | 🟢 Completed | 2026-09-08 | 385k samples preprocessed, Dataset & Collator verified with DataLoader |
 | Tokenizer | 🟢 Completed | 2026-09-08 | 16k BPE trained on code+text; CodeEmbedTokenizer wrapper tested & verified |
-| BM25 Baseline | ⬜ Not Started | — | Phase 1 |
-| Basic Encoder | ⬜ Not Started | — | Phase 2 |
+| BM25 Baseline | 🟢 Completed | 2026-09-12 | Vectorized inverted index; MRR 0.9498, R@1 0.9180, R@10 0.9950; logged to MLflow |
+| Basic Encoder | 🟢 Built & Verified | 2026-09-12 | 7.38M Pre-LN Transformer from scratch; InfoNCE loss; CUDA mixed precision training loop; 45/45 tests passing |
 | Shared Encoder | ⬜ Not Started | — | Phase 3 |
 | Dual Encoder | ⬜ Not Started | — | Phase 4 |
 | Hard Negatives | ⬜ Not Started | — | Phase 5 |
 | Ablations | ⬜ Not Started | — | Phase 6 |
 | Pretrained Baseline | ⬜ Not Started | — | Phase 7 |
 | Demo | ⬜ Not Started | — | Phase 8 |
-| Documentation | 🟢 Active | 2026-09-08 | AGENTS.md, Memory.md, and STUDY_GUIDE.md actively maintained |
+| Documentation | 🟢 Active | 2026-09-12 | AGENTS.md, Memory.md, STUDY_GUIDE.md, and walkthrough.md actively maintained |
 
 ---
 
@@ -36,29 +36,29 @@
 - [x] `tokenizer.py` — Tokenizer wrapper
 
 ### Model (`model/`)
-- [ ] `embeddings.py` — Token, Positional, Modality embeddings
-- [ ] `attention.py` — Multi-head attention
-- [ ] `transformer.py` — Transformer block + encoder stack
-- [ ] `pooling.py` — Masked mean, CLS pooling
-- [ ] `encoder.py` — Base encoder class
-- [ ] `shared_encoder.py` — Shared encoder with modality
-- [ ] `dual_encoder.py` — Separate code/text encoders
+- [x] `embeddings.py` — Token, Positional, Modality embeddings
+- [x] `attention.py` — Custom multi-head self-attention with scaled dot-product
+- [x] `transformer.py` — Pre-LN Transformer block + 4-layer encoder stack
+- [x] `pooling.py` — Masked mean, CLS pooling
+- [x] `encoder.py` — Base encoder class (embeddings + transformer + pooling + projection + L2 norm)
+- [ ] `shared_encoder.py` — Shared encoder with modality (Phase 3)
+- [ ] `dual_encoder.py` — Separate code/text encoders (Phase 4)
 
 ### Losses (`losses/`)
-- [ ] `contrastive.py` — InfoNCE loss (in-batch + hard negatives)
+- [x] `contrastive.py` — Symmetric InfoNCE loss with in-batch negatives
 
 ### Training (`training/`)
-- [ ] `trainer.py` — Training loop, logging, checkpointing
-- [ ] `train.py` — Entry point scripts
+- [x] `trainer.py` — ContrastiveTrainer with CUDA AMP, cosine warmup schedule, gradient clipping, checkpointing
+- [ ] `train.py` — General multi-model entry point
 
 ### Retrieval (`retrieval/`)
 - [ ] `build_index.py` — FAISS index construction
 - [ ] `search.py` — Query encoding + search
-- [ ] `bm25.py` — BM25 baseline
+- [x] `bm25.py` — High-performance vectorized BM25 baseline with sub-token splitting
 
 ### Evaluation (`evaluation/`)
-- [ ] `metrics.py` — MRR, Recall@K, NDCG
-- [ ] `evaluate.py` — Evaluation pipeline
+- [x] `metrics.py` — MRR, Recall@K, NDCG, and non-parametric bootstrap CIs
+- [x] `evaluate.py` — Reusable evaluation pipeline & checkpoint evaluation CLI
 - [ ] `qualitative.py` — Failure analysis, examples
 - [ ] `pretrained_baseline.py` — Frozen pretrained eval
 
@@ -67,6 +67,21 @@
 
 ### Scripts & Analysis (`scripts/`)
 - [x] `eda.py` — Token length distribution & sequence coverage analysis
+- [x] `run_baseline.py` — End-to-end BM25 evaluation benchmark + MLflow logging
+- [x] `run_basic.py` — Basic Encoder training execution script + MLflow tracking
+
+### Tests (`tests/`)
+- [x] `test_metrics.py` — Comprehensive unit tests for all IR metrics & bootstrap CIs (100% pass)
+- [x] `test_bm25.py` — Unit tests for code tokenization, indexing, and ranking (100% pass)
+- [x] `test_model.py` — Unit tests for embeddings, attention, Pre-LN blocks, pooling, and BaseEncoder (100% pass)
+- [x] `test_loss.py` — Unit tests for InfoNCE loss symmetry, alignment, and gradients (100% pass)
+
+### Documentation & Project Logs
+- [x] `walkthrough.md` — Detailed chronological implementation walkthrough, benchmarks, and verification log (must be updated after every milestone)
+- [x] `STUDY_GUIDE.md` — Theory, mathematical intuition, tensor shapes, and bug fix log
+- [x] `Memory.md` — Active tracker, components, experiment logs, and decisions
+- [x] `AGENTS.md` — Operating guide and protocol for AI coding agents
+
 
 ---
 
@@ -75,7 +90,7 @@
 ### Baseline Experiments
 | Run ID | Model | Config | MRR | R@1 | R@5 | R@10 | NDCG | Notes |
 |--------|-------|--------|-----|-----|-----|------|------|-------|
-| — | BM25 | — | — | — | — | — | — | Pending |
+| `234f518410034b628b9c90eb7cbbc1cf` | BM25 | k1=1.5, b=0.75 | 0.9498 | 0.9180 | 0.9890 | 0.9950 | 0.9610 | Lexical benchmark on 1k test queries vs 21,005 corpus (logged to mlruns) |
 
 ### Architecture Experiments
 | Run ID | Model | Params | Tokenizer | Negatives | MRR | R@1 | R@5 | R@10 | Status |
@@ -116,9 +131,12 @@
 |------|----------|-----------|------------------------|
 | 2026-09-07 | Python Environment = local .venv with uv | Strict project rule: always use local .venv (`.venv/Scripts/activate`) managed by uv | Global / shared venv |
 | 2026-09-08 | Max seq len = 256 | Empirical EDA (50k sample): P50=169, docstring coverage >95%, code coverage 68.7%; maximizes in-batch negative capacity in InfoNCE | 128 (too aggressive), 512 (4x attention memory penalty) |
+| 2026-09-12 | Vectorized Inverted Index for BM25 | 150x+ speedup over naive iteration (3.74s vs 592s for 1k queries against 21k corpus) while computing exact BM25Okapi scores | Naive Python doc iteration in rank_bm25 |
+| 2026-09-12 | MLflow SQLite Backend | Use `sqlite:///mlflow.db` tracking URI to adhere to modern MLflow standards and avoid deprecated filestore warnings | Legacy `./mlruns` |
+| 2026-09-12 | Custom Pre-LN Transformer (~7.38M) | Implemented raw PyTorch `nn.Module` Pre-LN Transformer (4 layers, 8 heads, d_model=256, d_ff=1024) with MaskedMeanPooling + L2 normalization head | HuggingFace transformers wrapper, Post-LN |
+| 2026-09-12 | CUDA Mixed Precision Training | Use `torch.amp.autocast` + `torch.amp.GradScaler` for high-throughput GPU training on RTX 4050 with automatic CPU fallback | Full FP32 |
 | — | Vocab size = 16k | Balance coverage vs embedding size | 8k, 32k |
 | — | Temperature = 0.07 | Standard for contrastive learning | 0.05, 0.1 |
-| — | 4 Transformer layers | ~8M params, fits GPU memory | 2, 6, 8 |
 | — | Dual encoder: 3L each | Match total params of shared (~8M) | 4L each (16M total) |
 
 ---
@@ -133,25 +151,18 @@
 
 ## Reproducibility Checklist
 
-- [ ] All configs versioned in `configs/`
-- [ ] Random seeds set (PyTorch, NumPy, Python)
-- [ ] MLflow tracks all hyperparameters
-- [ ] Model checkpoints saved with config
-- [ ] Tokenizer saved with model
-- [ ] Data splits fixed (no random shuffle in val/test)
+- [x] All configs versioned in `configs/` (`configs/baseline.yaml`, `configs/basic.yaml`)
+- [x] Random seeds set (PyTorch, NumPy, Python)
+- [x] MLflow tracks all hyperparameters and metrics
+- [x] Model checkpoints saved with config (`checkpoints/basic/best_basic.pt`)
+- [x] Tokenizer saved with model
+- [x] Data splits fixed (no random shuffle in val/test)
 - [x] Requirements pinned in `requirements.txt`
 - [ ] Python version specified in `pyproject.toml`
 
 ---
 
 ## Next Actions
-
-### Immediate (This Session)
-1. [x] Scaffold project structure
-2. [x] Create `requirements.txt` and `.gitignore`
-3. [x] Install dependencies and CUDA PyTorch in local `.venv` via `uv`
-4. [x] Implement data download script (`data/download.py`)
-5. [x] Preprocess and clean CodeSearchNet (`data/preprocess.py`)
 
 ### Phase 0: Setup & Data Pipeline (Completed)
 1. [x] Download and preprocess CodeSearchNet Python (`data/download.py`, `data/preprocess.py`)
@@ -160,11 +171,32 @@
 4. [x] Run EDA / token length distribution (`scripts/eda.py`)
 5. [x] Implement PyTorch Dataset + Dynamic Collator (`data/dataset.py`)
 
-### Immediate Next: Phase 1 — BM25 Baseline & Evaluation Framework
-1. [ ] Implement evaluation metrics from mathematical definitions (`evaluation/metrics.py`: MRR, Recall@K, NDCG)
-2. [ ] Implement BM25 lexical retrieval index (`retrieval/bm25.py`)
-3. [ ] Run baseline evaluation script on test set (`scripts/run_baseline.py`)
-4. [ ] Log baseline metrics to MLflow (`mlflow`)
+### Phase 1: BM25 Baseline & Evaluation Framework (Completed)
+1. [x] Implement evaluation metrics from mathematical definitions (`evaluation/metrics.py`: MRR, Recall@K, NDCG, bootstrap CIs)
+2. [x] Implement high-performance BM25 lexical retrieval index (`retrieval/bm25.py`)
+3. [x] Implement reusable evaluation runner (`evaluation/evaluate.py`)
+4. [x] Create configuration (`configs/baseline.yaml`)
+5. [x] Run baseline evaluation script on test set (`scripts/run_baseline.py`)
+6. [x] Log baseline metrics to MLflow (`sqlite:///mlflow.db` & `mlruns`)
+7. [x] Comprehensive unit tests (`tests/test_metrics.py`, `tests/test_bm25.py` - 28/28 passed)
+
+### Phase 2: Model 1 — Basic Encoder (Completed)
+1. [x] Implement Token, Positional, and Modality embeddings (`model/embeddings.py`)
+2. [x] Implement custom Multi-Head Attention (`model/attention.py`)
+3. [x] Implement Pre-LN Transformer block & Encoder stack (`model/transformer.py`)
+4. [x] Implement Masked Mean & CLS Pooling (`model/pooling.py`)
+5. [x] Implement BaseEncoder pipeline with L2 normalization (`model/encoder.py`)
+6. [x] Implement InfoNCE contrastive loss with in-batch negatives (`losses/contrastive.py`)
+7. [x] Implement ContrastiveTrainer with CUDA AMP & cosine warmup (`training/trainer.py`)
+8. [x] Create training configuration (`configs/basic.yaml`) and entry point (`scripts/run_basic.py`)
+9. [x] Comprehensive unit test suites (`tests/test_model.py`, `tests/test_loss.py` - 45/45 total passed)
+10. [x] Implement checkpoint evaluation CLI in `evaluation/evaluate.py`
+
+### Immediate Next: Phase 3 — Model 2: Shared Encoder
+1. [ ] Implement SharedEncoder with learned modality embeddings (`model/shared_encoder.py`)
+2. [ ] Add modality token / ID routing for `<CODE>` and `<TEXT>` inputs
+3. [ ] Create configuration (`configs/shared.yaml`) and runner (`scripts/run_shared.py`)
+4. [ ] Train Shared Encoder and evaluate comparison vs Basic Encoder on test set
 
 ---
 

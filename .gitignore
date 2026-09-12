@@ -28,6 +28,8 @@ indices/
 # Experiment Tracking
 mlruns/
 .mlflow/
+mlflow.db
+*.db
 
 # Notebook checkpoints
 .ipynb_checkpoints/

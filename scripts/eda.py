@@ -1,8 +1,8 @@
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from tokenizers import Tokenizer
-from tqdm import tqdm
 
 DATA_PATH=Path("data/processed/train.parquet")
 TOKENIZER_PATH=Path("tokenizer/tokenizer.json")
