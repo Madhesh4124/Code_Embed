@@ -30,7 +30,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from losses.contrastive import InfoNCELoss
-from model.encoder import BaseEncoder
+from model.shared_encoder import SharedEncoder
 
 
 def set_seed(seed: int = 42) -> None:
@@ -77,7 +77,7 @@ class ContrastiveTrainer:
     """Trainer for contrastive dual-representation encoders.
 
     Args:
-        model: BaseEncoder model instance.
+        model: BaseEncoder or SharedEncoder model instance.
         train_loader: DataLoader yielding training batches.
         val_loader: DataLoader yielding validation batches.
         config: Dict of training and model configurations.
@@ -86,7 +86,7 @@ class ContrastiveTrainer:
 
     def __init__(
         self,
-        model: BaseEncoder,
+        model: nn.Module,
         train_loader: DataLoader,
         val_loader: DataLoader | None = None,
         config: dict[str, Any] | None = None,
@@ -101,6 +101,8 @@ class ContrastiveTrainer:
 
         # Training hyperparameters
         t_cfg = self.config.get("training", {})
+        m_cfg = self.config.get("model", {})
+        self.model_name = m_cfg.get("name", "model")
         self.lr = float(t_cfg.get("lr", 3e-4))
         self.weight_decay = float(t_cfg.get("weight_decay", 0.01))
         self.grad_clip = float(t_cfg.get("grad_clip", 1.0))
@@ -114,7 +116,7 @@ class ContrastiveTrainer:
         # Checkpoint directory
         self.checkpoint_dir = Path(self.config.get("checkpoint_dir", "checkpoints"))
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        self.best_checkpoint_path = self.checkpoint_dir / "best_basic.pt"
+        self.best_checkpoint_path = self.checkpoint_dir / f"best_{self.model_name}.pt"
 
         # Loss function
         self.criterion = InfoNCELoss(temperature=self.temperature)
@@ -154,6 +156,22 @@ class ContrastiveTrainer:
         self.global_step = 0
         self.best_val_score = -float("inf")
 
+    def _encode_pair(
+        self,
+        code_ids: torch.Tensor,
+        code_mask: torch.Tensor,
+        text_ids: torch.Tensor,
+        text_mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Encode code and text representations with modality routing if applicable."""
+        if isinstance(self.model, SharedEncoder) or hasattr(self.model, "num_modalities"):
+            code_emb = self.model(code_ids, attention_mask=code_mask, modality_ids="code")
+            text_emb = self.model(text_ids, attention_mask=text_mask, modality_ids="text")
+        else:
+            code_emb = self.model(code_ids, attention_mask=code_mask)
+            text_emb = self.model(text_ids, attention_mask=text_mask)
+        return code_emb, text_emb
+
     def train_step(self, batch: dict[str, torch.Tensor]) -> tuple[float, float, float]:
         """Execute a single forward-backward optimization step.
 
@@ -172,10 +190,7 @@ class ContrastiveTrainer:
         text_mask = batch["text_mask"].to(self.device, non_blocking=True)
 
         with torch.amp.autocast(device_type=self.device.type, enabled=self.use_amp):
-            # Forward both code and text through the same shared BaseEncoder
-            code_emb = self.model(code_ids, attention_mask=code_mask)  # (B, D)
-            text_emb = self.model(text_ids, attention_mask=text_mask)  # (B, D)
-
+            code_emb, text_emb = self._encode_pair(code_ids, code_mask, text_ids, text_mask)
             loss = self.criterion(text_emb, code_emb)
 
         # Backward pass with scaled gradients
@@ -224,9 +239,9 @@ class ContrastiveTrainer:
             text_mask = batch["text_mask"].to(self.device, non_blocking=True)
 
             with torch.amp.autocast(device_type=self.device.type, enabled=self.use_amp):
-                code_emb = self.model(code_ids, attention_mask=code_mask)
-                text_emb = self.model(text_ids, attention_mask=text_mask)
+                code_emb, text_emb = self._encode_pair(code_ids, code_mask, text_ids, text_mask)
                 loss = self.criterion(text_emb, code_emb)
+
 
             total_loss += float(loss.item())
 

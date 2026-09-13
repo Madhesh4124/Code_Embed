@@ -130,16 +130,55 @@ Phase 2 delivered our first neural architecture: a single ~7.38M parameter Trans
 
 ---
 
-## 5. Summary Benchmark Comparison
-
-| Model | Modality Handling | Corpus Size | Eval Queries | MRR | R@1 | R@5 | R@10 | NDCG@10 | Artifact Location |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **BM25 Baseline** | Lexical Subwords | 21,005 | 1,000 (test) | **0.9498** | **0.9180** | **0.9890** | **0.9950** | **0.9610** | MLflow Run `234f518410034b628b9c90eb7cbbc1cf` |
-| **Basic Encoder** | Neural Shared (7.38M) | 21,585 | 100 (val) | **0.4633** | **0.4100** | **0.5400** | **0.5500** | **0.4806** | `checkpoints/basic/best_basic.pt` |
+5. [Phase 3: Model 2 — Shared Transformer Encoder](#5-phase-3-model-2--shared-transformer-encoder)
+6. [Summary Benchmark Comparison](#6-summary-benchmark-comparison)
+7. [Comprehensive Test Suite & Quality Checks](#7-comprehensive-test-suite--quality-checks)
+8. [Next Milestone: Phase 4 (Separate / Dual Encoders)](#8-next-milestone-phase-4-separate--dual-encoders)
 
 ---
 
-## 6. Comprehensive Test Suite & Quality Checks
+## 5. Phase 3: Model 2 — Shared Transformer Encoder
+
+Phase 3 introduced **modality awareness** into the single shared Transformer encoder. By adding learned modality embeddings ($\mathbf{e}_{\text{modality}} \in \mathbb{R}^{2 \times d_{\text{model}}}$), the network learns to project code and natural language queries into a unified semantic space while explicitly preserving modality boundaries.
+
+### 5.1 Architecture Components (`model/shared_encoder.py`)
+* [`model/embeddings.py`](model/embeddings.py):
+  - Updated `EmbeddingLayer` with `use_modality_embedding=True` and `num_modalities=2`.
+  - Composite embedding: $\mathbf{x} = \text{LayerNorm}(\mathbf{E}_{\text{token}} + \mathbf{E}_{\text{pos}} + \mathbf{E}_{\text{modality}})$.
+* [`model/shared_encoder.py`](model/shared_encoder.py):
+  - `SharedEncoder`: 4-layer Pre-LN Transformer (~7.38M parameters, exactly 7,383,040 parameters = BaseEncoder + 2 $\times$ 256 modality table).
+  - Modality router supporting string (`"code"`, `"text"`), integer (`0`, `1`), or tensor specifications.
+  - Masked mean pooling + Linear projection head (`bias=False`) + LayerNorm + L2 normalization onto unit hypersphere ($\|\mathbf{z}\|_2 = 1.0$).
+* [`training/trainer.py`](training/trainer.py):
+  - Enhanced `ContrastiveTrainer` with polymorphic `_encode_pair` routing code to modality 0 and docstrings to modality 1.
+  - Dynamically saves best checkpoints to `checkpoints/shared/best_shared.pt`.
+* [`configs/shared.yaml`](configs/shared.yaml) & [`scripts/run_shared.py`](scripts/run_shared.py):
+  - Standardized configuration and training runner with full MLflow tracking.
+
+### 5.2 Test Set Benchmark Results
+Trained on NVIDIA RTX 4050 (CUDA AMP fp16) across 3,010 training batches (~385k samples). Evaluated on 1,000 sampled test queries against the full 21,005 test corpus with 1,000 bootstrap resamples:
+
+| Metric | Score | 95% Confidence Interval (1,000 resamples) |
+| :--- | :---: | :---: |
+| **MRR** | **0.9296** | [0.9171, 0.9427] |
+| **Recall@1** | **0.8880** | [0.8690, 0.9080] |
+| **Recall@5** | **0.9780** | [0.9690, 0.9870] |
+| **Recall@10** | **0.9840** | [0.9760, 0.9920] |
+| **NDCG@10** | **0.9429** | [0.9326, 0.9540] |
+
+---
+
+## 6. Summary Benchmark Comparison
+
+| Model | Architecture / Modality | Corpus Size | Eval Queries | MRR | R@1 | R@5 | R@10 | NDCG@10 | Artifact Location |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **BM25 Baseline** | Lexical Subwords | 21,005 | 1,000 (test) | **0.9498** | **0.9180** | **0.9890** | **0.9950** | **0.9610** | MLflow `234f518410034b628b9c90eb7cbbc1cf` |
+| **Basic Encoder** | Neural Shared (7.38M, no mod) | 21,585 | 100 (val) | **0.4633** | **0.4100** | **0.5400** | **0.5500** | **0.4806** | `checkpoints/basic/best_basic.pt` |
+| **Shared Encoder** | Neural Shared + Modality (7.38M) | 21,005 | 1,000 (test) | **0.9296** | **0.8880** | **0.9780** | **0.9840** | **0.9429** | [`checkpoints/shared/best_shared.pt`](checkpoints/shared/best_shared.pt) |
+
+---
+
+## 7. Comprehensive Test Suite & Quality Checks
 
 The codebase is continuously verified using Pytest and Ruff:
 
@@ -147,24 +186,12 @@ The codebase is continuously verified using Pytest and Ruff:
 uv run pytest tests/ -v
 ```
 
-### Test Results (45/45 Passed in ~7s):
-* **`tests/test_model.py` (12 tests)**:
-  - Token, positional, and modality embedding dimensions and padding zeros.
-  - MultiHeadSelfAttention shapes, head splitting, and zero-attention masking to pad tokens.
-  - PreLNTransformerBlock and TransformerEncoder forward passes.
-  - MaskedMeanPooling non-pad aggregation vs CLSPooling.
-  - BaseEncoder unit-norm output constraint ($\|\mathbf{z}\|_2 = 1.0$) and full backward gradient flow.
-* **`tests/test_loss.py` (5 tests)**:
-  - Parameter validation (strictly positive temperature).
-  - Batch size mismatch error handling.
-  - Loss symmetry: $\mathcal{L}(\mathbf{A}, \mathbf{B}) == \mathcal{L}(\mathbf{B}, \mathbf{A})$.
-  - Perfect orthogonal alignment behavior and dual-accuracy metric.
-  - Gradient backpropagation through both text and code branches.
-* **`tests/test_bm25.py` (9 tests)**:
-  - Sub-token code tokenization (`snake_case`, `camelCase`, alphanumeric units).
-  - Inverted indexing, search retrieval, rank computation, and pickle serialization.
-* **`tests/test_metrics.py` (19 tests)**:
-  - MRR, Recall@K, NDCG@K boundary conditions, empty inputs, unretrieved targets, and 1,000 bootstrap CIs.
+### Test Results (50/50 Passed in ~7s):
+* **`tests/test_model.py` (12 tests)**: Token/pos/mod embeddings, multi-head attention, Pre-LN blocks, pooling, unit normalization.
+* **`tests/test_shared_encoder.py` (5 tests)**: Modality routing, unit hypersphere outputs, backward gradient propagation through modality table, parameter budget verification.
+* **`tests/test_loss.py` (5 tests)**: InfoNCE symmetry, alignment, gradient flow.
+* **`tests/test_bm25.py` (9 tests)**: Inverted index, tokenization, serialization.
+* **`tests/test_metrics.py` (19 tests)**: MRR, Recall@K, NDCG@K, bootstrap CIs.
 
 ### Linter & Style:
 ```bash
@@ -174,10 +201,11 @@ uv run ruff check .
 
 ---
 
-## 7. Next Milestone: Phase 3 (Shared Encoder)
+## 8. Next Milestone: Phase 4 (Separate / Dual Encoders)
 
-With the baseline and basic encoder established, the next milestone is **Phase 3: Model 2 — Shared Encoder**:
-1. Implement `SharedEncoder` with learned modality embeddings (`model/shared_encoder.py`).
-2. Route `<CODE>` and `<TEXT>` token inputs and train on CodeSearchNet.
-3. Compare alignment and retrieval performance directly against the Basic Encoder and BM25 baseline.
+With the Shared Encoder validated, the next milestone is **Phase 4: Model 3 — Separate (Dual) Encoders**:
+1. Implement `DualEncoder` with separate dedicated code and text Transformer encoders (`model/dual_encoder.py`).
+2. Control parameter budget to match ~8M total (3 layers each $\times$ ~4M params).
+3. Train with symmetric InfoNCE and benchmark against Shared Encoder and BM25 to answer Research Question 3 (RQ3).
+
 

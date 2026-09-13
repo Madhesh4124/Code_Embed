@@ -174,6 +174,7 @@ def evaluate_checkpoint(
     """
     from data.dataset import create_dataloader
     from model.encoder import BaseEncoder
+    from model.shared_encoder import SharedEncoder
     from tokenizer.tokenizer import CodeEmbedTokenizer
 
     console = Console()
@@ -186,16 +187,31 @@ def evaluate_checkpoint(
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     cfg = checkpoint.get("config", {})
     m_cfg = cfg.get("model", {})
+    model_name = str(m_cfg.get("name", "basic")).lower()
 
-    model = BaseEncoder(
-        vocab_size=int(m_cfg.get("vocab_size", 16000)),
-        d_model=int(m_cfg.get("d_model", 256)),
-        n_layers=int(m_cfg.get("n_layers", 4)),
-        n_heads=int(m_cfg.get("n_heads", 8)),
-        d_ff=int(m_cfg.get("d_ff", 1024)),
-        max_seq_len=int(m_cfg.get("max_seq_len", 256)),
-        dropout=0.0,
-    ).to(device)
+    if model_name == "shared" or "num_modalities" in m_cfg:
+        model = SharedEncoder(
+            vocab_size=int(m_cfg.get("vocab_size", 16000)),
+            d_model=int(m_cfg.get("d_model", 256)),
+            n_layers=int(m_cfg.get("n_layers", 4)),
+            n_heads=int(m_cfg.get("n_heads", 8)),
+            d_ff=int(m_cfg.get("d_ff", 1024)),
+            max_seq_len=int(m_cfg.get("max_seq_len", 256)),
+            dropout=0.0,
+            num_modalities=int(m_cfg.get("num_modalities", 2)),
+        ).to(device)
+        is_shared = True
+    else:
+        model = BaseEncoder(
+            vocab_size=int(m_cfg.get("vocab_size", 16000)),
+            d_model=int(m_cfg.get("d_model", 256)),
+            n_layers=int(m_cfg.get("n_layers", 4)),
+            n_heads=int(m_cfg.get("n_heads", 8)),
+            d_ff=int(m_cfg.get("d_ff", 1024)),
+            max_seq_len=int(m_cfg.get("max_seq_len", 256)),
+            dropout=0.0,
+        ).to(device)
+        is_shared = False
 
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
@@ -224,8 +240,12 @@ def evaluate_checkpoint(
             text_mask = batch["text_mask"].to(device)
 
             with torch.amp.autocast(device_type=device.type, enabled=use_amp):
-                c_emb = model(code_ids, attention_mask=code_mask)
-                t_emb = model(text_ids, attention_mask=text_mask)
+                if is_shared:
+                    c_emb = model(code_ids, attention_mask=code_mask, modality_ids="code")
+                    t_emb = model(text_ids, attention_mask=text_mask, modality_ids="text")
+                else:
+                    c_emb = model(code_ids, attention_mask=code_mask)
+                    t_emb = model(text_ids, attention_mask=text_mask)
 
             all_code_embs.append(c_emb.cpu().numpy())
             all_text_embs.append(t_emb.cpu().numpy())

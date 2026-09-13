@@ -13,13 +13,13 @@
 | Tokenizer | 🟢 Completed | 2026-09-08 | 16k BPE trained on code+text; CodeEmbedTokenizer wrapper tested & verified |
 | BM25 Baseline | 🟢 Completed | 2026-09-12 | Vectorized inverted index; MRR 0.9498, R@1 0.9180, R@10 0.9950; logged to MLflow |
 | Basic Encoder | 🟢 Built & Verified | 2026-09-12 | 7.38M Pre-LN Transformer from scratch; InfoNCE loss; CUDA mixed precision training loop; 45/45 tests passing |
-| Shared Encoder | ⬜ Not Started | — | Phase 3 |
+| Shared Encoder | 🟢 Completed | 2026-09-13 | 7.38M Transformer + Modality embeddings; Test MRR 0.9296, R@1 0.8880, R@10 0.9840; 50/50 tests passing |
 | Dual Encoder | ⬜ Not Started | — | Phase 4 |
 | Hard Negatives | ⬜ Not Started | — | Phase 5 |
 | Ablations | ⬜ Not Started | — | Phase 6 |
 | Pretrained Baseline | ⬜ Not Started | — | Phase 7 |
 | Demo | ⬜ Not Started | — | Phase 8 |
-| Documentation | 🟢 Active | 2026-09-12 | AGENTS.md, Memory.md, STUDY_GUIDE.md, and walkthrough.md actively maintained |
+| Documentation | 🟢 Active | 2026-09-13 | AGENTS.md, Memory.md, STUDY_GUIDE.md, and walkthrough.md actively maintained |
 
 ---
 
@@ -41,7 +41,7 @@
 - [x] `transformer.py` — Pre-LN Transformer block + 4-layer encoder stack
 - [x] `pooling.py` — Masked mean, CLS pooling
 - [x] `encoder.py` — Base encoder class (embeddings + transformer + pooling + projection + L2 norm)
-- [ ] `shared_encoder.py` — Shared encoder with modality (Phase 3)
+- [x] `shared_encoder.py` — Shared encoder with modality embeddings (Phase 3)
 - [ ] `dual_encoder.py` — Separate code/text encoders (Phase 4)
 
 ### Losses (`losses/`)
@@ -58,7 +58,7 @@
 
 ### Evaluation (`evaluation/`)
 - [x] `metrics.py` — MRR, Recall@K, NDCG, and non-parametric bootstrap CIs
-- [x] `evaluate.py` — Reusable evaluation pipeline & checkpoint evaluation CLI
+- [x] `evaluate.py` — Reusable evaluation pipeline & checkpoint evaluation CLI (supports Basic & Shared)
 - [ ] `qualitative.py` — Failure analysis, examples
 - [ ] `pretrained_baseline.py` — Frozen pretrained eval
 
@@ -69,12 +69,14 @@
 - [x] `eda.py` — Token length distribution & sequence coverage analysis
 - [x] `run_baseline.py` — End-to-end BM25 evaluation benchmark + MLflow logging
 - [x] `run_basic.py` — Basic Encoder training execution script + MLflow tracking
+- [x] `run_shared.py` — Shared Encoder training execution script + MLflow tracking
 
 ### Tests (`tests/`)
 - [x] `test_metrics.py` — Comprehensive unit tests for all IR metrics & bootstrap CIs (100% pass)
 - [x] `test_bm25.py` — Unit tests for code tokenization, indexing, and ranking (100% pass)
 - [x] `test_model.py` — Unit tests for embeddings, attention, Pre-LN blocks, pooling, and BaseEncoder (100% pass)
 - [x] `test_loss.py` — Unit tests for InfoNCE loss symmetry, alignment, and gradients (100% pass)
+- [x] `test_shared_encoder.py` — Unit tests for modality routing, parameter count, and backward gradients (100% pass)
 
 ### Documentation & Project Logs
 - [x] `walkthrough.md` — Detailed chronological implementation walkthrough, benchmarks, and verification log (must be updated after every milestone)
@@ -95,33 +97,10 @@
 ### Architecture Experiments
 | Run ID | Model | Params | Tokenizer | Negatives | MRR | R@1 | R@5 | R@10 | Status |
 |--------|-------|--------|-----------|-----------|-----|-----|-----|------|--------|
-| — | Basic | — | — | In-batch | — | — | — | — | Pending |
-| — | Shared | — | — | In-batch | — | — | — | — | Pending |
-| — | Dual | — | — | In-batch | — | — | — | — | Pending |
-| — | Dual | — | — | Hard | — | — | — | — | Pending |
-
-### Ablation Experiments
-| Run ID | Ablation | Variant | MRR | R@1 | R@5 | R@10 | Notes |
-|--------|----------|---------|-----|-----|-----|------|-------|
-| — | Tokenizer | Custom BPE | — | — | — | — | Pending |
-| — | Tokenizer | Generic (GPT-2) | — | — | — | — | Pending |
-| — | Pooling | Mean | — | — | — | — | Pending |
-| — | Pooling | CLS | — | — | — | — | Pending |
-| — | Temperature | 0.05 | — | — | — | — | Pending |
-| — | Temperature | 0.07 | — | — | — | — | Pending |
-| — | Temperature | 0.10 | — | — | — | — | Pending |
-| — | Embedding Dim | 128 | — | — | — | — | Pending |
-| — | Embedding Dim | 256 | — | — | — | — | Pending |
-| — | Embedding Dim | 512 | — | — | — | — | Pending |
-| — | Model Size | 2 layers | — | — | — | — | Pending |
-| — | Model Size | 4 layers | — | — | — | — | Pending |
-| — | Model Size | 6 layers | — | — | — | — | Pending |
-
-### Pretrained Baseline
-| Run ID | Model | Params | MRR | R@1 | R@5 | R@10 | Notes |
-|--------|-------|--------|-----|-----|-----|------|-------|
-| — | all-MiniLM-L6-v2 | 22M | — | — | — | — | Pending |
-| — | codebert-base | 125M | — | — | — | — | Pending |
+| — | Basic | 7.38M | Custom BPE | In-batch | — | — | — | — | Baseline |
+| `84bb3f1d13054e8d914bef04dc632d32` | Shared | 7.38M | Custom BPE | In-batch | **0.9296** | **0.8880** | **0.9780** | **0.9840** | 🟢 Completed (Epoch 1 on test set) |
+| — | Dual | ~8M | — | In-batch | — | — | — | — | Pending (Phase 4) |
+| — | Dual | ~8M | — | Hard | — | — | — | — | Pending (Phase 5) |
 
 ---
 
@@ -135,9 +114,7 @@
 | 2026-09-12 | MLflow SQLite Backend | Use `sqlite:///mlflow.db` tracking URI to adhere to modern MLflow standards and avoid deprecated filestore warnings | Legacy `./mlruns` |
 | 2026-09-12 | Custom Pre-LN Transformer (~7.38M) | Implemented raw PyTorch `nn.Module` Pre-LN Transformer (4 layers, 8 heads, d_model=256, d_ff=1024) with MaskedMeanPooling + L2 normalization head | HuggingFace transformers wrapper, Post-LN |
 | 2026-09-12 | CUDA Mixed Precision Training | Use `torch.amp.autocast` + `torch.amp.GradScaler` for high-throughput GPU training on RTX 4050 with automatic CPU fallback | Full FP32 |
-| — | Vocab size = 16k | Balance coverage vs embedding size | 8k, 32k |
-| — | Temperature = 0.07 | Standard for contrastive learning | 0.05, 0.1 |
-| — | Dual encoder: 3L each | Match total params of shared (~8M) | 4L each (16M total) |
+| 2026-09-13 | Learned Modality Embeddings | Add 2x256 modality table (0=code, 1=text) to composite embedding layer, allowing single Transformer to distinguish representation space without duplicating weights | Token prefix only, separate models |
 
 ---
 
@@ -151,10 +128,10 @@
 
 ## Reproducibility Checklist
 
-- [x] All configs versioned in `configs/` (`configs/baseline.yaml`, `configs/basic.yaml`)
+- [x] All configs versioned in `configs/` (`configs/baseline.yaml`, `configs/basic.yaml`, `configs/shared.yaml`)
 - [x] Random seeds set (PyTorch, NumPy, Python)
 - [x] MLflow tracks all hyperparameters and metrics
-- [x] Model checkpoints saved with config (`checkpoints/basic/best_basic.pt`)
+- [x] Model checkpoints saved with config (`checkpoints/shared/best_shared.pt`)
 - [x] Tokenizer saved with model
 - [x] Data splits fixed (no random shuffle in val/test)
 - [x] Requirements pinned in `requirements.txt`
@@ -192,11 +169,19 @@
 9. [x] Comprehensive unit test suites (`tests/test_model.py`, `tests/test_loss.py` - 45/45 total passed)
 10. [x] Implement checkpoint evaluation CLI in `evaluation/evaluate.py`
 
-### Immediate Next: Phase 3 — Model 2: Shared Encoder
-1. [ ] Implement SharedEncoder with learned modality embeddings (`model/shared_encoder.py`)
-2. [ ] Add modality token / ID routing for `<CODE>` and `<TEXT>` inputs
-3. [ ] Create configuration (`configs/shared.yaml`) and runner (`scripts/run_shared.py`)
-4. [ ] Train Shared Encoder and evaluate comparison vs Basic Encoder on test set
+### Phase 3: Model 2 — Shared Encoder (Completed)
+1. [x] Implement SharedEncoder with learned modality embeddings (`model/shared_encoder.py`)
+2. [x] Add modality token / ID routing for `<CODE>` and `<TEXT>` inputs
+3. [x] Create configuration (`configs/shared.yaml`) and runner (`scripts/run_shared.py`)
+4. [x] Comprehensive unit tests in `tests/test_shared_encoder.py` (50/50 total tests passing)
+5. [x] Train Shared Encoder on CodeSearchNet Python (RTX 4050 CUDA AMP)
+6. [x] Evaluate on test set (1,000 queries vs 21,005 corpus) and log to MLflow: MRR 0.9296, R@1 0.8880, R@10 0.9840
+
+### Immediate Next: Phase 4 — Model 3: Separate (Dual) Encoders
+1. [ ] Implement DualEncoder with separate code and text encoders (`model/dual_encoder.py`)
+2. [ ] Parameter budget matching: 3 layers each (~4M each, ~8M total)
+3. [ ] Create configuration (`configs/dual.yaml`) and runner (`scripts/run_dual.py`)
+4. [ ] Train and benchmark Dual Encoder against Shared Encoder and BM25 baseline
 
 ---
 

@@ -447,9 +447,12 @@ Evaluating on 1,000 representative test queries against the entire 21,005 code c
    * Implemented `ContrastiveTrainer` with CUDA AMP mixed precision, cosine warmup scheduler, and checkpointing (`training/trainer.py`).
    * Validated with 45/45 passing unit tests across `test_model.py`, `test_loss.py`, `test_bm25.py`, and `test_metrics.py`.
    * Verified end-to-end training and checkpoint evaluation CLI (`evaluation/evaluate.py`).
-3. **Phase 3: Model 2 — Shared Encoder (🟡 NEXT UP)**:
-   * Implement `SharedEncoder` with learned modality embeddings (`model/shared_encoder.py`).
-   * Prepend `<CODE>` and `<TEXT>` token routing and compare representation alignment vs Basic Encoder.
+3. **Phase 3: Model 2 — Shared Encoder (🟢 COMPLETED)**:
+   * Implemented `SharedEncoder` with learned modality embeddings (`model/shared_encoder.py`).
+   * Routed `<CODE>` (0) and `<TEXT>` (1) inputs, trained on RTX 4050 GPU (Epoch 1 val MRR 0.9473, test MRR 0.9296).
+4. **Phase 4: Model 3 — Separate (Dual) Encoders (🟡 NEXT UP)**:
+   * Implement `DualEncoder` with separate code and text Transformer encoders (`model/dual_encoder.py`).
+   * Parameter budget matching: 3 layers each (~4M each, ~8M total).
 
 ---
 
@@ -518,4 +521,32 @@ Given a batch of $B = 128$ normalized query vectors $\mathbf{Z}_{\text{text}} \i
 3. **Symmetric Loss**:
    $$\mathcal{L} = \frac{1}{2} \left[ \mathcal{L}_{\text{text}\rightarrow\text{code}} + \mathcal{L}_{\text{code}\rightarrow\text{text}} \right]$$
    Ensuring bidirectional alignment so the model excels at both text-to-code search and code-to-text matching.
+
+---
+
+## 9. Phase 3 Deep Dive: Modality Embeddings in Shared Transformers
+
+### 9.1 The Modality Gap in Shared Encoders
+
+When a single Transformer weights matrix processes both English natural language and Python code syntax, it encounters the **modality gap**:
+* Docstrings are natural language sentences containing grammar, English prose, punctuation, and abstract intent.
+* Code snippets are AST structures with indentation, variable bindings, control flow keywords (`def`, `return`, `for`), and type signatures.
+
+If the embedding layer only provides token and positional embeddings:
+$$\mathbf{x}_i = \text{TokenEmbed}(t_i) + \text{PosEmbed}(i)$$
+The Transformer has to deduce the input domain solely from the subword vocabulary. In contrast, by introducing a learned **Modality Embedding**:
+$$\mathbf{x}_i = \text{TokenEmbed}(t_i) + \text{PosEmbed}(i) + \text{ModalityEmbed}(m), \quad m \in \{0, 1\}$$
+
+Where:
+* $m=0 \implies \mathbf{e}_{\text{code}} \in \mathbb{R}^D$ (Code modality)
+* $m=1 \implies \mathbf{e}_{\text{text}} \in \mathbb{R}^D$ (Natural language query modality)
+
+### 9.2 Mathematical Benefit of Modality Embeddings
+1. **Geometric Separation & Orthogonal Shift**:
+   The modality embedding acts as a learnable global bias vector that shifts the token distribution into distinct subspaces before entering the attention layers.
+2. **Shared Self-Attention Cross-Pollination**:
+   Because the self-attention weights ($\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V$) and FFN layers are shared across code and text, the model learns universal structural representations while having an explicit switch indicating whether it is parsing code or text.
+3. **Parameter Efficiency**:
+   Adding modality embeddings requires only $2 \times d_{\text{model}} = 2 \times 256 = 512$ additional parameters (a $0.007\%$ increase in total model size), yet achieves a dramatic **0.9296 MRR** on the 21,005-code test retrieval benchmark.
+
 

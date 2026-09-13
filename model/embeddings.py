@@ -125,10 +125,13 @@ class ModalityEmbedding(nn.Module):
 
 
 class EmbeddingLayer(nn.Module):
-    """Composite embedding layer combining token and positional representations.
+    """Composite embedding layer combining token, positional, and optional modality representations.
 
     Applies:
-        x = LayerNorm(TokenEmbedding(ids) + PositionalEmbedding(pos) [+ ModalityEmbedding(mod)])
+        x = TokenEmbedding(ids) + PositionalEmbedding(pos)
+        if modality_ids is not None (and use_modality_embedding is True):
+            x = x + ModalityEmbedding(modality_ids)
+        x = LayerNorm(x)
         x = Dropout(x)
 
     Args:
@@ -137,6 +140,8 @@ class EmbeddingLayer(nn.Module):
         max_seq_len: Maximum sequence length (default: 256).
         dropout: Dropout probability (default: 0.1).
         padding_idx: Padding token index (default: 0).
+        use_modality_embedding: Whether to include modality embeddings (default: False).
+        num_modalities: Number of modalities if enabled (default: 2).
     """
 
     def __init__(
@@ -146,11 +151,19 @@ class EmbeddingLayer(nn.Module):
         max_seq_len: int = 256,
         dropout: float = 0.1,
         padding_idx: int = 0,
+        use_modality_embedding: bool = False,
+        num_modalities: int = 2,
     ) -> None:
         super().__init__()
         self.d_model = d_model
         self.token_embed = TokenEmbedding(vocab_size, d_model, padding_idx=padding_idx)
         self.pos_embed = PositionalEmbedding(max_seq_len, d_model)
+        self.use_modality_embedding = use_modality_embedding
+        self.modality_embed = (
+            ModalityEmbedding(num_modalities=num_modalities, d_model=d_model)
+            if use_modality_embedding
+            else None
+        )
         self.layer_norm = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
@@ -172,6 +185,10 @@ class EmbeddingLayer(nn.Module):
         x = self.token_embed(input_ids)  # (B, L, D)
         x = x + self.pos_embed(L, device=input_ids.device)  # (B, L, D)
 
+        if self.modality_embed is not None and modality_ids is not None:
+            x = x + self.modality_embed(modality_ids)
+
         x = self.layer_norm(x)
         x = self.dropout(x)
         return x
+
