@@ -21,14 +21,14 @@
 ## Key Features
 
 ### Must Have
-- [ ] Custom BPE tokenizer trained on Python + natural language
-- [ ] From-scratch Transformer encoder (4 layers, 256-dim, 8 heads)
-- [ ] Three model architectures: Basic, Shared, Separate encoders
-- [ ] Contrastive learning with InfoNCE loss and in-batch negatives
-- [ ] BM25 lexical baseline
-- [ ] Evaluation metrics: MRR, Recall@1/5/10, NDCG
+- [x] Custom BPE tokenizer trained on Python + natural language
+- [x] From-scratch Transformer encoder (4 layers, 256-dim, 8 heads)
+- [x] Three model architectures: Basic, Shared, Separate encoders (All completed: Basic, Shared, and Dual)
+- [x] Contrastive learning with InfoNCE loss and in-batch negatives
+- [x] BM25 lexical baseline
+- [x] Evaluation metrics: MRR, Recall@1/5/10, NDCG
 - [ ] FAISS-based retrieval pipeline
-- [ ] MLflow experiment tracking
+- [x] MLflow experiment tracking
 - [ ] CLI demo for semantic code search
 
 ### Should Have

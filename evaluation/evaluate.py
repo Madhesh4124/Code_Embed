@@ -173,6 +173,7 @@ def evaluate_checkpoint(
         Dictionary of computed retrieval metrics and confidence intervals.
     """
     from data.dataset import create_dataloader
+    from model.dual_encoder import DualEncoder
     from model.encoder import BaseEncoder
     from model.shared_encoder import SharedEncoder
     from tokenizer.tokenizer import CodeEmbedTokenizer
@@ -189,7 +190,18 @@ def evaluate_checkpoint(
     m_cfg = cfg.get("model", {})
     model_name = str(m_cfg.get("name", "basic")).lower()
 
-    if model_name == "shared" or "num_modalities" in m_cfg:
+    if model_name == "dual":
+        model = DualEncoder(
+            vocab_size=int(m_cfg.get("vocab_size", 16000)),
+            d_model=int(m_cfg.get("d_model", 256)),
+            n_layers=int(m_cfg.get("n_layers", 3)),
+            n_heads=int(m_cfg.get("n_heads", 8)),
+            d_ff=int(m_cfg.get("d_ff", 1024)),
+            max_seq_len=int(m_cfg.get("max_seq_len", 256)),
+            dropout=0.0,
+        ).to(device)
+        model_type = "dual"
+    elif model_name == "shared" or "num_modalities" in m_cfg:
         model = SharedEncoder(
             vocab_size=int(m_cfg.get("vocab_size", 16000)),
             d_model=int(m_cfg.get("d_model", 256)),
@@ -200,7 +212,7 @@ def evaluate_checkpoint(
             dropout=0.0,
             num_modalities=int(m_cfg.get("num_modalities", 2)),
         ).to(device)
-        is_shared = True
+        model_type = "shared"
     else:
         model = BaseEncoder(
             vocab_size=int(m_cfg.get("vocab_size", 16000)),
@@ -211,11 +223,11 @@ def evaluate_checkpoint(
             max_seq_len=int(m_cfg.get("max_seq_len", 256)),
             dropout=0.0,
         ).to(device)
-        is_shared = False
+        model_type = "basic"
 
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
-    console.print(f"[green][OK][/green] Loaded weights from {checkpoint_path} (epoch {checkpoint.get('epoch', '?')})")
+    console.print(f"[green][OK][/green] Loaded {model_type} weights from {checkpoint_path} (epoch {checkpoint.get('epoch', '?')})")
 
     # Build DataLoader for corpus and queries
     tokenizer = CodeEmbedTokenizer()
@@ -240,7 +252,10 @@ def evaluate_checkpoint(
             text_mask = batch["text_mask"].to(device)
 
             with torch.amp.autocast(device_type=device.type, enabled=use_amp):
-                if is_shared:
+                if model_type == "dual":
+                    c_emb = model.encode_code(code_ids, attention_mask=code_mask)
+                    t_emb = model.encode_text(text_ids, attention_mask=text_mask)
+                elif model_type == "shared":
                     c_emb = model(code_ids, attention_mask=code_mask, modality_ids="code")
                     t_emb = model(text_ids, attention_mask=text_mask, modality_ids="text")
                 else:

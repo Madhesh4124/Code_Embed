@@ -164,7 +164,12 @@ class ContrastiveTrainer:
         text_mask: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Encode code and text representations with modality routing if applicable."""
-        if isinstance(self.model, SharedEncoder) or hasattr(self.model, "num_modalities"):
+        from model.dual_encoder import DualEncoder
+
+        if isinstance(self.model, DualEncoder):
+            code_emb = self.model.encode_code(code_ids, attention_mask=code_mask)
+            text_emb = self.model.encode_text(text_ids, attention_mask=text_mask)
+        elif isinstance(self.model, SharedEncoder) or hasattr(self.model, "num_modalities"):
             code_emb = self.model(code_ids, attention_mask=code_mask, modality_ids="code")
             text_emb = self.model(text_ids, attention_mask=text_mask, modality_ids="text")
         else:

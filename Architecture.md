@@ -10,7 +10,8 @@
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
                         DATA PIPELINE
-    download → clean → filter → deduplicate → train/val/test split
+    download → clean → filter → deduplicate → split → pretokenize
+                        (train/val/test_tokenized.pt)
 └────────────────────────────────┬────────────────────────────────┘
                                  │
                                  ▼
@@ -139,7 +140,8 @@ codeembed/
 ├── data/
 │   ├── download.py         # CodeSearchNet download
 │   ├── preprocess.py       # Cleaning, filtering, dedup
-│   ├── dataset.py          # PyTorch Dataset + Collator
+│   ├── pretokenize.py      # Batch pre-tokenization into fast .pt tensors
+│   ├── dataset.py          # PyTorch Dataset + Collator (supports cached tensors)
 │   └── splits.py           # Train/val/test splits
 │
 ├── tokenizer/

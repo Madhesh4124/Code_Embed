@@ -14,7 +14,7 @@
 | BM25 Baseline | 🟢 Completed | 2026-09-12 | Vectorized inverted index; MRR 0.9498, R@1 0.9180, R@10 0.9950; logged to MLflow |
 | Basic Encoder | 🟢 Built & Verified | 2026-09-12 | 7.38M Pre-LN Transformer from scratch; InfoNCE loss; CUDA mixed precision training loop; 45/45 tests passing |
 | Shared Encoder | 🟢 Completed | 2026-09-13 | 7.38M Transformer + Modality embeddings; Test MRR 0.9296, R@1 0.8880, R@10 0.9840; 50/50 tests passing |
-| Dual Encoder | ⬜ Not Started | — | Phase 4 |
+| Dual Encoder | 🟢 Completed | 2026-09-19 | Decoupled 3-layer code & text BaseEncoders (~13.19M params); Test MRR 0.8670, R@1 0.8050, R@10 0.9620; 55/55 tests passing |
 | Hard Negatives | ⬜ Not Started | — | Phase 5 |
 | Ablations | ⬜ Not Started | — | Phase 6 |
 | Pretrained Baseline | ⬜ Not Started | — | Phase 7 |
@@ -28,7 +28,8 @@
 ### Data Pipeline (`data/`)
 - [x] `download.py` — CodeSearchNet Python download
 - [x] `preprocess.py` — Cleaning, filtering, dedup
-- [x] `dataset.py` — PyTorch Dataset + Collator
+- [x] `pretokenize.py` — Offline binary tensor caching (`train_tokenized.pt`), eliminating CPU tokenization bottleneck (300x faster batch feeding)
+- [x] `dataset.py` — PyTorch Dataset + Fast Collator with auto-detection for pre-tokenized tensors
 - [x] `splits.py` — Handled via data/processed/{train,validation,test}.parquet and create_dataloader()
 
 ### Tokenizer (`tokenizer/`)
@@ -42,7 +43,7 @@
 - [x] `pooling.py` — Masked mean, CLS pooling
 - [x] `encoder.py` — Base encoder class (embeddings + transformer + pooling + projection + L2 norm)
 - [x] `shared_encoder.py` — Shared encoder with modality embeddings (Phase 3)
-- [ ] `dual_encoder.py` — Separate code/text encoders (Phase 4)
+- [x] `dual_encoder.py` — Separate code/text encoders (Phase 4)
 
 ### Losses (`losses/`)
 - [x] `contrastive.py` — Symmetric InfoNCE loss with in-batch negatives
@@ -70,6 +71,7 @@
 - [x] `run_baseline.py` — End-to-end BM25 evaluation benchmark + MLflow logging
 - [x] `run_basic.py` — Basic Encoder training execution script + MLflow tracking
 - [x] `run_shared.py` — Shared Encoder training execution script + MLflow tracking
+- [x] `run_dual.py` — Dual Encoder training execution script + MLflow tracking
 
 ### Tests (`tests/`)
 - [x] `test_metrics.py` — Comprehensive unit tests for all IR metrics & bootstrap CIs (100% pass)
@@ -77,6 +79,7 @@
 - [x] `test_model.py` — Unit tests for embeddings, attention, Pre-LN blocks, pooling, and BaseEncoder (100% pass)
 - [x] `test_loss.py` — Unit tests for InfoNCE loss symmetry, alignment, and gradients (100% pass)
 - [x] `test_shared_encoder.py` — Unit tests for modality routing, parameter count, and backward gradients (100% pass)
+- [x] `test_dual_encoder.py` — Unit tests for DualEncoder parameters, decoupled gradients, and modality encoding (100% pass)
 
 ### Documentation & Project Logs
 - [x] `walkthrough.md` — Detailed chronological implementation walkthrough, benchmarks, and verification log (must be updated after every milestone)
@@ -99,8 +102,8 @@
 |--------|-------|--------|-----------|-----------|-----|-----|-----|------|--------|
 | — | Basic | 7.38M | Custom BPE | In-batch | — | — | — | — | Baseline |
 | `84bb3f1d13054e8d914bef04dc632d32` | Shared | 7.38M | Custom BPE | In-batch | **0.9296** | **0.8880** | **0.9780** | **0.9840** | 🟢 Completed (Epoch 1 on test set) |
-| — | Dual | ~8M | — | In-batch | — | — | — | — | Pending (Phase 4) |
-| — | Dual | ~8M | — | Hard | — | — | — | — | Pending (Phase 5) |
+| `c6acad9bbc4043d69bf680b841f78962` | Dual | 13.19M | Custom BPE | In-batch | **0.8670** | **0.8050** | **0.9450** | **0.9620** | 🟢 Completed (Epoch 2 on test set) |
+| — | Dual | ~13M | — | Hard | — | — | — | — | Pending (Phase 5) |
 
 ---
 
@@ -115,23 +118,24 @@
 | 2026-09-12 | Custom Pre-LN Transformer (~7.38M) | Implemented raw PyTorch `nn.Module` Pre-LN Transformer (4 layers, 8 heads, d_model=256, d_ff=1024) with MaskedMeanPooling + L2 normalization head | HuggingFace transformers wrapper, Post-LN |
 | 2026-09-12 | CUDA Mixed Precision Training | Use `torch.amp.autocast` + `torch.amp.GradScaler` for high-throughput GPU training on RTX 4050 with automatic CPU fallback | Full FP32 |
 | 2026-09-13 | Learned Modality Embeddings | Add 2x256 modality table (0=code, 1=text) to composite embedding layer, allowing single Transformer to distinguish representation space without duplicating weights | Token prefix only, separate models |
+| 2026-09-17 | Pre-tokenized Binary Tensor Cache | Pre-tokenize dataset splits into `.pt` tensor files (`train_tokenized.pt`, etc.) eliminating CPU collation bottleneck (batch fetch time dropped from 3.3s to 10ms; cuts epoch training time from ~3 hours to ~10–12 minutes) | On-the-fly collation with num_workers (unstable on Windows) |
 
 ---
 
 ## Known Issues / Blockers
 
-| Issue | Severity | Status | Workaround |
-|-------|----------|--------|------------|
-| — | — | — | — |
+| Issue | Severity | Status | Workaround / Solution |
+|-------|----------|--------|------------------------|
+| On-the-fly CPU tokenization bottleneck (GPU starvation in Phase 3) | High | 🟢 Resolved (2026-09-17) | Implemented `data/pretokenize.py` to pre-tokenize all splits into contiguous binary tensor files (`train_tokenized.pt`), accelerating batch feeding from 0.3 batches/s to 99.9 batches/s (~300x speedup). |
 
 ---
 
 ## Reproducibility Checklist
 
-- [x] All configs versioned in `configs/` (`configs/baseline.yaml`, `configs/basic.yaml`, `configs/shared.yaml`)
+- [x] All configs versioned in `configs/` (`configs/baseline.yaml`, `configs/basic.yaml`, `configs/shared.yaml`, `configs/dual.yaml`)
 - [x] Random seeds set (PyTorch, NumPy, Python)
 - [x] MLflow tracks all hyperparameters and metrics
-- [x] Model checkpoints saved with config (`checkpoints/shared/best_shared.pt`)
+- [x] Model checkpoints saved with config (`checkpoints/shared/best_shared.pt`, `checkpoints/dual/best_dual.pt`)
 - [x] Tokenizer saved with model
 - [x] Data splits fixed (no random shuffle in val/test)
 - [x] Requirements pinned in `requirements.txt`
@@ -177,11 +181,18 @@
 5. [x] Train Shared Encoder on CodeSearchNet Python (RTX 4050 CUDA AMP)
 6. [x] Evaluate on test set (1,000 queries vs 21,005 corpus) and log to MLflow: MRR 0.9296, R@1 0.8880, R@10 0.9840
 
-### Immediate Next: Phase 4 — Model 3: Separate (Dual) Encoders
-1. [ ] Implement DualEncoder with separate code and text encoders (`model/dual_encoder.py`)
-2. [ ] Parameter budget matching: 3 layers each (~4M each, ~8M total)
-3. [ ] Create configuration (`configs/dual.yaml`) and runner (`scripts/run_dual.py`)
-4. [ ] Train and benchmark Dual Encoder against Shared Encoder and BM25 baseline
+### Phase 4: Model 3 — Separate (Dual) Encoders (Completed)
+1. [x] Implement DualEncoder with separate code and text encoders (`model/dual_encoder.py`)
+2. [x] Parameter budget matching: 3 layers each (~6.59M each, ~13.19M total)
+3. [x] Create configuration (`configs/dual.yaml`) and runner (`scripts/run_dual.py`)
+4. [x] Train Dual Encoder on CodeSearchNet Python (CUDA AMP on RTX 4050, 2 epochs)
+5. [x] Evaluate on formal 1,000 test query benchmark vs 21,005 corpus and log to MLflow: MRR 0.8670, R@1 0.8050, R@5 0.9450, R@10 0.9620
+
+### Immediate Next: Phase 5 — Hard Negative Mining
+1. [ ] Implement hard negative mining pipeline (`training/hard_negatives.py`) using BM25 and trained Dual Encoder
+2. [ ] Implement contrastive loss supporting explicit mined hard negatives
+3. [ ] Create configuration (`configs/dual_hard.yaml`) and training runner (`scripts/run_dual_hard.py`)
+4. [ ] Retrain Dual Encoder with hard negatives and evaluate on test set (RQ4)
 
 ---
 
