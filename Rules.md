@@ -98,9 +98,18 @@ torch.save(checkpoint, path)
 
 ### Logging (MLflow)
 - Log hyperparameters at run start
-- Log metrics every N steps
-- Log model artifacts at end
+- Log train/val loss every epoch
+- Log MRR, Recall@k, NDCG@k at eval steps
+- Log model checkpoints as artifacts
+- Log attention maps / heatmaps periodically
 - Tag runs: `architecture`, `tokenizer`, `negative_strategy`
+
+### Progress Tracking & Status Visibility (MANDATORY)
+- **Visible Progress for All Long-Running Tasks**: Every data preparation, mining, tokenization, training, or evaluation loop spanning more than a few seconds **MUST** provide explicit progress indication.
+- **Log File & Non-TTY Compatibility**: In-place carriage returns (`\r`) from curses/rich bars get buffered when redirected to log files (`sys.stdout.isatty() == False`). All long-running scripts must either:
+  1. Print periodic discrete milestone updates (e.g. `[Step X/N (Y%)] Elapsed: ... ETA: ... Throughput: ... q/s`, `flush=True`) at regular intervals (e.g., every 5,000 items or every 2%), OR
+  2. Configure progress bars (e.g. `tqdm(..., mininterval=5.0, file=sys.stdout)`) to regularly flush updates.
+- **Zero Silent Long Jobs**: Never allow loops over large datasets (e.g. 385k samples) to run silently without real-time percentage and ETA output.
 
 ### Gradient Monitoring
 ```python

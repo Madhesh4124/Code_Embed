@@ -39,7 +39,7 @@ When starting or continuing a task in this project, follow this protocol:
 
 1. **State Check**: Read [`Memory.md`](Memory.md) to determine the current active phase and outstanding next actions.
 2. **Review Specifications**: Check [`Phases.md`](Phases.md) for the exact requirements and exit criteria of the task, and [`Rules.md`](Rules.md) for architectural and styling guardrails.
-3. **Execution**: Implement changes adhering strictly to raw PyTorch conventions, type hints, and docstrings with explicit tensor shapes. Execute tests and scripts via `uv run`.
+3. **Execution**: Implement changes adhering strictly to raw PyTorch conventions, type hints, and docstrings with explicit tensor shapes. Ensure all long-running scripts (training, evaluation, mining, tokenization) include continuous real-time progress bars or milestone line logs (`flush=True`) so status is never silent in terminal or log files. Execute tests and scripts via `uv run`.
 4. **Verification**: Run relevant unit tests (`uv run pytest tests/`) and ensure formatting and linting pass (`uv run ruff check .`).
 5. **State Update**: Update [`Memory.md`](Memory.md) and [`walkthrough.md`](walkthrough.md) by checking off completed items, adding experiment results, and logging implementation walkthrough details and architectural decisions.
 

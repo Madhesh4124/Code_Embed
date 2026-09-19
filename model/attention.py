@@ -7,6 +7,7 @@ using high-level HuggingFace model wrappers.
 import math
 
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 
@@ -76,6 +77,23 @@ class MultiHeadSelfAttention(nn.Module):
         k = self.k_proj(hidden_states).view(B, L, self.n_heads, self.d_k).transpose(1, 2)
         v = self.v_proj(hidden_states).view(B, L, self.n_heads, self.d_k).transpose(1, 2)
 
+        # Fast path: leverage PyTorch F.scaled_dot_product_attention (FlashAttention /
+        # fused memory-efficient attention) when explicit attention weights are not requested.
+        # This avoids materializing massive (B, H, L, L) attention tensors in VRAM, eliminating
+        # GPU out-of-memory errors and Windows WDDM host-RAM paging thrashing.
+        if not return_attention_weights:
+            attn_mask = (
+                attention_mask.unsqueeze(1).unsqueeze(2).bool()
+                if attention_mask is not None
+                else None
+            )
+            dropout_p = self.dropout.p if self.training else 0.0
+            context = F.scaled_dot_product_attention(
+                q, k, v, attn_mask=attn_mask, dropout_p=dropout_p
+            )
+            context = context.transpose(1, 2).contiguous().view(B, L, D)
+            return self.out_proj(context), None
+
         # 2. Scaled dot-product scores: (B, H, L, d_k) @ (B, H, d_k, L) -> (B, H, L, L)
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
 
@@ -100,6 +118,5 @@ class MultiHeadSelfAttention(nn.Module):
         # 7. Final output projection
         output = self.out_proj(context)
 
-        weights_to_return = attn_weights if return_attention_weights else None
-        return output, weights_to_return
+        return output, attn_weights
 

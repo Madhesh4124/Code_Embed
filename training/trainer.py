@@ -29,7 +29,7 @@ from rich.progress import (
 from torch import nn
 from torch.utils.data import DataLoader
 
-from losses.contrastive import InfoNCELoss
+from losses.contrastive import InfoNCEWithHardNegativesLoss
 from model.shared_encoder import SharedEncoder
 
 
@@ -118,8 +118,8 @@ class ContrastiveTrainer:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.best_checkpoint_path = self.checkpoint_dir / f"best_{self.model_name}.pt"
 
-        # Loss function
-        self.criterion = InfoNCELoss(temperature=self.temperature)
+        # Loss function with hard negative capability
+        self.criterion = InfoNCEWithHardNegativesLoss(temperature=self.temperature)
 
         # Weight decay filtering: do not decay 1D parameters (biases, LayerNorm)
         decay_params: list[nn.Parameter] = []
@@ -142,11 +142,11 @@ class ContrastiveTrainer:
 
         # Compute total training steps
         steps_per_epoch = len(self.train_loader)
-        total_training_steps = min(self.max_steps, self.max_epochs * steps_per_epoch)
+        self.total_training_steps = min(self.max_steps, self.max_epochs * steps_per_epoch)
         self.scheduler = get_cosine_schedule_with_warmup(
             self.optimizer,
             num_warmup_steps=self.warmup_steps,
-            num_training_steps=total_training_steps,
+            num_training_steps=self.total_training_steps,
         )
 
         # Mixed precision GradScaler
@@ -177,11 +177,23 @@ class ContrastiveTrainer:
             text_emb = self.model(text_ids, attention_mask=text_mask)
         return code_emb, text_emb
 
+    def _encode_code_only(self, code_ids: torch.Tensor, code_mask: torch.Tensor) -> torch.Tensor:
+        """Encode code representations only."""
+        from model.dual_encoder import DualEncoder
+
+        if isinstance(self.model, DualEncoder):
+            return self.model.encode_code(code_ids, attention_mask=code_mask)
+        elif isinstance(self.model, SharedEncoder) or hasattr(self.model, "num_modalities"):
+            return self.model(code_ids, attention_mask=code_mask, modality_ids="code")
+        else:
+            return self.model(code_ids, attention_mask=code_mask)
+
     def train_step(self, batch: dict[str, torch.Tensor]) -> tuple[float, float, float]:
         """Execute a single forward-backward optimization step.
 
         Args:
-            batch: Dictionary with 'code_ids', 'code_mask', 'text_ids', 'text_mask'.
+            batch: Dictionary with 'code_ids', 'code_mask', 'text_ids', 'text_mask',
+                and optional 'hard_neg_code_ids', 'hard_neg_code_mask'.
 
         Returns:
             Tuple of (loss_value, text_to_code_acc, code_to_text_acc).
@@ -194,9 +206,23 @@ class ContrastiveTrainer:
         text_ids = batch["text_ids"].to(self.device, non_blocking=True)
         text_mask = batch["text_mask"].to(self.device, non_blocking=True)
 
+        has_hard_negs = "hard_neg_code_ids" in batch
+
         with torch.amp.autocast(device_type=self.device.type, enabled=self.use_amp):
             code_emb, text_emb = self._encode_pair(code_ids, code_mask, text_ids, text_mask)
-            loss = self.criterion(text_emb, code_emb)
+
+            if has_hard_negs:
+                hn_ids = batch["hard_neg_code_ids"].to(self.device, non_blocking=True)
+                hn_mask = batch["hard_neg_code_mask"].to(self.device, non_blocking=True)
+                # Reshape (B, K, L) -> (B * K, L) for batch encoding
+                B, K, L = hn_ids.shape
+                hn_ids_flat = hn_ids.view(B * K, L)
+                hn_mask_flat = hn_mask.view(B * K, L)
+                hn_emb = self._encode_code_only(hn_ids_flat, hn_mask_flat)
+                loss = self.criterion(text_emb, code_emb, hn_emb)
+            else:
+                hn_emb = None
+                loss = self.criterion(text_emb, code_emb)
 
         # Backward pass with scaled gradients
         self.scaler.scale(loss).backward()
@@ -211,7 +237,9 @@ class ContrastiveTrainer:
         self.scheduler.step()
 
         # Accuracy computation
-        t2c_acc, c2t_acc = self.criterion.compute_accuracy(text_emb.detach(), code_emb.detach())
+        t2c_acc, c2t_acc = self.criterion.compute_accuracy(
+            text_emb.detach(), code_emb.detach(), hn_emb.detach() if hn_emb is not None else None
+        )
 
         return float(loss.item()), t2c_acc, c2t_acc
 
@@ -322,6 +350,12 @@ class ContrastiveTrainer:
                     # Step logging
                     if self.global_step % self.log_every_steps == 0:
                         current_lr = self.scheduler.get_last_lr()[0]
+                        print(
+                            f"Step {self.global_step}/{self.total_training_steps} | "
+                            f"Loss: {loss:.4f} | T2C Acc: {t2c_acc:.3f} | "
+                            f"LR: {current_lr:.2e}",
+                            flush=True,
+                        )
                         metrics = {
                             "train_loss": loss,
                             "train_t2c_acc": t2c_acc,
@@ -345,7 +379,7 @@ class ContrastiveTrainer:
                                 epoch=epoch,
                                 is_best=True,
                             )
-                            self.console.print(f" [bold green]✓ New best val MRR: {val_mrr:0.4f} saved[/bold green]")
+                            self.console.print(f" [bold green][OK] New best val MRR: {val_mrr:0.4f} saved[/bold green]")
 
                     if self.global_step >= self.max_steps:
                         break
@@ -363,7 +397,7 @@ class ContrastiveTrainer:
                 is_best = val_mrr > self.best_val_score
                 if is_best:
                     self.best_val_score = val_mrr
-                    self.console.print(f"[bold green]★ New Best Model: MRR = {val_mrr:0.4f}[/bold green]")
+                    self.console.print(f"[bold green][*] New Best Model: MRR = {val_mrr:0.4f}[/bold green]")
 
                 self.save_checkpoint(
                     self.checkpoint_dir / f"checkpoint_epoch_{epoch}.pt",

@@ -676,12 +676,13 @@ During early training runs with `data/dataset.py`, 50 steps took ~5 minutes. An 
 
 All neural models were trained on CodeSearchNet Python using symmetric InfoNCE contrastive loss with in-batch negatives ($\tau = 0.07$, AdamW, cosine annealing with warmup) and evaluated on 1,000 sampled test queries against the full 21,005 test code corpus with 1,000 bootstrap resamples:
 
-| Model | Architecture | Parameters | Test MRR | Test Recall@1 | Test Recall@5 | Test Recall@10 | Test NDCG@10 |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **BM25 Baseline** | Lexical Okapi (sub-tokens) | 0 | **0.9498** | **0.9180** | **0.9890** | **0.9950** | **0.9610** |
-| **Basic Encoder** | 4-layer Shared (no modality) | 7.38M | **0.4633** | **0.4100** | **0.5400** | **0.5500** | **0.4806** |
-| **Dual Encoder** | Decoupled (3-layer code + 3-layer text) | 13.19M | **0.8670** | **0.8050** | **0.9450** | **0.9620** | **0.8893** |
-| **Shared Encoder** | 4-layer Shared + Modality Table | 7.38M | **0.9296** | **0.8880** | **0.9780** | **0.9840** | **0.9429** |
+| Phase | Model | Architecture | Parameters | Epochs | Test MRR | Test Recall@1 | Test Recall@5 | Test Recall@10 | Test NDCG@10 |
+|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Phase 1** | **BM25 Baseline** | Lexical Okapi (sub-tokens) | 0 | 0 (Lexical) | **0.9498** | **0.9180** | **0.9890** | **0.9950** | **0.9610** |
+| **Phase 2** | **Basic Encoder** | 4-layer Shared (no modality) | 7.38M | <1 (Smoke) | **0.4633** | **0.4100** | **0.5400** | **0.5500** | **0.4806** |
+| **Phase 3** | **Shared Encoder** | 4-layer Shared + Modality Table | 7.38M | 1 | **0.9296** | **0.8880** | **0.9780** | **0.9840** | **0.9429** |
+| **Phase 4** | **Dual Encoder** | Decoupled (3-layer code + 3-layer text) | 13.19M | 2 | **0.8670** | **0.8050** | **0.9450** | **0.9620** | **0.8893** |
+| **Phase 5** | **Shared + Hard Negatives** | 4-layer Shared + BM25 Hard | 7.38M | 2 (1+1) | **0.9383** | **0.9030** | **0.9780** | **0.9880** | **0.9503** |
 
 ---
 
@@ -713,5 +714,63 @@ All neural models were trained on CodeSearchNet Python using symmetric InfoNCE c
 
 3. **Q: Why did you choose Pre-LN over Post-LN for the Transformer?**
    * *A*: Post-LN applies LayerNorm after the residual addition, attenuating backward gradients through the normalization derivative $\frac{1}{\sqrt{\sigma^2+\epsilon}}$ as depth increases. Pre-LN places LayerNorm on the internal residual branch, creating an unimpeded identity highway $\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_0} = \mathbf{I} + \dots$ that eliminates gradient vanishing/exploding at initialization.
+
+---
+
+## 12. Phase 5 Deep Dive: Hard Negative Mining & GPU Memory Optimization (RQ4)
+
+### 12.1 The Theoretical Need for Hard Negatives
+In standard contrastive learning (Phases 2–4), negative pairs are mined *in-batch*: for query $i$, all other $B - 1$ samples in the batch serve as negative distractors.
+* **The "Easy Negative" Problem**:
+  With random batch sampling across 385k functions, most in-batch negatives are trivially distinct (e.g., matching a date parsing function against an HTTP client, or an SQL query builder). The model quickly learns coarse topic classification without developing fine-grained semantic boundaries.
+* **Hard Negatives as Boundary Tighteners**:
+  A **hard negative** is a code snippet that shares heavy lexical and syntactic overlap with the query (high BM25 score) but implements different functionality. Penalizing these forces the embedding space to separate superficial lexical matches from genuine algorithmic semantics.
+
+### 12.2 Engineering Challenge 1: The BM25 Candidate Explosion & CSR Vectorization
+* **The Hang**: Naively querying the BM25 inverted index for 385k queries resulted in stacking posting lists containing high-frequency Python keywords (`self`, `return`, `none`), producing **1.2M+ candidate indices per query**. Running `np.argsort` on 1.2M elements per query took ~0.27s/query = **28.6 hours total** and generated 10GB+ memory allocation churn on Windows.
+* **The Mathematical Fix**:
+  1. Filter low-IDF syntax tokens ($\text{IDF} < 1.0$) and restrict each query to its top-8 most informative terms.
+  2. Precompute the corpus document-term matrix as a transpose Compressed Sparse Row (CSR) matrix $\mathbf{D}^\top \in \mathbb{R}^{V \times N}$.
+  3. Formulate query batching as sparse matrix multiplication:
+     $$\mathbf{S} = \mathbf{Q} \times \mathbf{D}^\top \in \mathbb{R}^{B_{\text{query}} \times N}$$
+  4. Parallelize query chunks across CPU threads with `ThreadPoolExecutor`.
+* **Result**: Throughput jumped to **1,964.9 queries/second** (~530x faster), mining all 385,381 queries in **3.2 minutes**.
+
+### 12.3 Engineering Challenge 2: The 8 GB RAM Spike & PyTorch Native SDPA
+* **The Root Cause**: Training with hard negatives requires 3 forward passes per step (`code`, `text`, `hard_negative`). Standard manual attention materialized $(128, 8, 256, 256)$ attention matrices across 4 layers and 3 passes:
+  $$3 \times 4 \times 1.07\text{ GB} \approx \mathbf{12.9\text{ GB of activation tensors}}$$
+  On the 6 GB RTX 4050 GPU, Windows WDDM overflowed 7+ GB into host system RAM via PCIe paging, creating an **8 GB system RAM spike** and slowing training down to **11.4 seconds per step**.
+* **The Architectural Fix**:
+  Integrated PyTorch native SDPA (`torch.nn.functional.scaled_dot_product_attention` / FlashAttention) into `MultiHeadSelfAttention`. SDPA computes attention in GPU SRAM tiles without materializing $O(L^2)$ matrices in VRAM.
+* **Result**:
+  - Peak VRAM dropped from **11,079 MB to 5,103 MB** (safely inside 6 GB VRAM).
+  - Host RAM dropped from **8,000 MB to <100 MB** (zero PCIe paging).
+  - Step latency dropped from **11.4s to 0.346s** (**33.0x speedup** ⚡).
+  - Full epoch trained in **20.84 minutes**.
+
+### 12.4 Empirical Benchmark & Scientific Answer to RQ4
+
+Evaluated on 1,000 test queries against the 21,005 test code corpus:
+
+| Metric | Shared (In-batch Only) | Shared + BM25 Hard (Epoch 1) | Shared + BM25 Hard (Epoch 2 Fine-tuned) | Delta vs In-Batch |
+| :--- | :---: | :---: | :---: | :---: |
+| **MRR** | 0.9296 | 0.9307 | **0.9383** | **+0.0087** |
+| **Recall@1** | 0.8880 | 0.8960 | **0.9030** | **+0.0150 (+1.5%)** |
+| **Recall@5** | 0.9780 | 0.9710 | **0.9780** | **0.0000** |
+| **Recall@10** | 0.9840 | 0.9820 | **0.9880** | **+0.0040** |
+| **NDCG@10** | 0.9429 | 0.9430 | **0.9503** | **+0.0074** |
+
+#### RQ4: Does hard negative mining improve representation quality over in-batch negatives alone?
+* **Answer**: **Decisively Yes (+1.5% Recall@1 boost, crossing 90%)**.
+* In-batch negatives provide coarse global alignment, while hard negatives sharpen the decision margin against deceptive syntactic lookalikes. Training for 2 epochs allowed the model to fine-tune its decision boundary against these challenging distractors, elevating exact Top-1 retrieval from **88.8% to 90.3%**.
+
+### 12.5 New Portfolio & Interview Questions from Phase 5
+
+1. **Q: How did you diagnose why training with hard negatives suddenly consumed 8 GB of host RAM on a machine with a 6 GB GPU?**
+   * *A*: In PyTorch on Windows (WDDM driver), when GPU allocations exceed physical VRAM, memory does not immediately crash with OOM; instead, WDDM transparently pages excess allocations into shared system RAM across the PCIe bus. In Phase 5, running 3 encoder passes per step generated 12.9 GB of intermediate attention activations. Paging 7 GB back and forth across PCIe caused both the 8 GB system RAM footprint and an 11.4s/step latency penalty. Replacing manual matrix attention with PyTorch native SDPA (FlashAttention SRAM tiling) cut activation memory to 5.1 GB, eliminating host RAM paging and speeding up training 33x.
+
+2. **Q: Why is sparse matrix multiplication ($\mathbf{Q} \times \mathbf{D}^\top$) faster than inverted index lookups for offline batch BM25 mining?**
+   * *A*: Naive posting-list lookups suffer from high CPU branch misprediction, random memory access, and dynamic array allocations when merging lists. By converting the inverted index into a transpose Compressed Sparse Row (CSR) matrix, sparse BLAS kernels execute vectorized sparse-dense dot products in contiguous memory with multi-threaded CPU parallelization, increasing throughput by >500x.
+
 
 

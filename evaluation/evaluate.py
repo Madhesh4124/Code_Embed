@@ -7,8 +7,12 @@ from either:
 """
 
 import os
+import sys
 from collections.abc import Sequence
 from pathlib import Path
+
+# Ensure repository root is in sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import mlflow
 import numpy as np

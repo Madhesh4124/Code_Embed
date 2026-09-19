@@ -32,8 +32,9 @@
 - [ ] CLI demo for semantic code search
 
 ### Should Have
-- [ ] Hard negative mining
-- [ ] Ablation studies (tokenizer, pooling, temperature, embedding dim, model size)
+- [x] Hard negative mining (BM25 CSR sparse mining + InfoNCEWithHardNegativesLoss)
+- [ ] Ablation studies (tokenizer, pooling, temperature, seq length)
+- [ ] Layer and parameter capacity scaling exploration (Phase 6.5: ~4M to ~54M params)
 - [ ] Pretrained baseline comparison
 - [ ] Qualitative evaluation with failure analysis
 - [ ] UMAP embedding visualization

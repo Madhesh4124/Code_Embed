@@ -10,7 +10,8 @@
 | **3** | 1 week | Model 2 | Shared encoder trained, evaluated |
 | **4** | 1 week | Model 3 | Separate encoders trained, evaluated |
 | **5** | 1 week | Hard Negatives | Hard negative mining + retrain |
-| **6** | 1 week | Ablations | Key ablation studies completed |
+| **6** | 1 week | Ablations | Key architectural ablation studies completed |
+| **6.5**| 0.5 week | Scaling & Capacity | Layer & parameter scaling within GPU limits (~4M to 54M) |
 | **7** | 1 week | Pretrained Baseline | Comparison with pretrained model |
 | **8** | 1 week | Demo & Docs | CLI demo, final analysis, report |
 
@@ -343,13 +344,14 @@ class InfoNCEWithHardNegatives(nn.Module):
 ```
 
 #### 5.3 Retrain Best Model
-- Use Dual encoder (or best from Phase 4)
-- Config: `configs/dual_hard.yaml`
+- Use Shared encoder with modality embeddings (`model/shared_encoder.py`)
+- Config: `configs/shared_hard.yaml`
+- Accelerated via PyTorch native SDPA (`torch.nn.functional.scaled_dot_product_attention`)
 
 ### Exit Criteria
-- [ ] Hard negative training completes
-- [ ] Comparison: In-batch vs Hard negatives
-- [ ] Conclusion on RQ4 documented
+- [x] Hard negative training completes (385k samples mined via SciPy CSR BM25 in 3.2m; 2 epochs trained in 20.8m each)
+- [x] Comparison: In-batch vs Hard negatives documented (Test MRR 0.9296 -> 0.9383; Recall@1 0.8880 -> 0.9030)
+- [x] Conclusion on RQ4 documented (BM25 hard negatives improve exact top-1 retrieval by +1.5% Recall@1 by tightening boundaries against syntactically deceptive false positives)
 
 ---
 
@@ -382,6 +384,43 @@ done
 - [ ] All ablations logged to MLflow
 - [ ] Summary table in `notebooks/ablation_analysis.ipynb`
 - [ ] Key findings documented
+
+---
+
+## Phase 6.5: Model Capacity & Scaling Exploration (Week 7.5)
+
+### Motivation & Research Goal
+Following Phase 6's architectural ablations (pooling, temperature, sequence length), Phase 6.5 investigates how model capacity—depth (number of layers) and width ($d_{\text{model}}$, $d_{\text{ff}}$)—impacts retrieval performance when trained with BM25 hard negatives under the strict physical constraints of a 6 GB consumer GPU (RTX 4050 Laptop GPU).
+
+Specifically, this phase evaluates the hypothesis:
+> *"Does scaling model capacity from 7.38M parameters up to ~54M parameters with BM25 hard negatives close the gap from 0.938 MRR to ~0.98 MRR on a single consumer GPU?"*
+
+### GPU Memory Budget & Scaling Strategy
+* **Hardware Ceiling**: NVIDIA GeForce RTX 4050 Laptop GPU (6,141 MiB VRAM).
+* **Attention Mechanism**: PyTorch native SDPA (`torch.nn.functional.scaled_dot_product_attention` / FlashAttention) tiles attention in GPU SRAM, preventing activation explosions.
+* **Micro-Batching & Gradient Accumulation**:
+  - For models exceeding 6 GB VRAM at batch size $B = 128$, training automatically shifts to micro-batching:
+    - Micro-batch $B_{\text{micro}} = 64$, accumulation steps $= 2$ (effective batch size 128).
+    - Micro-batch $B_{\text{micro}} = 32$, accumulation steps $= 4$ (effective batch size 128).
+  - This preserves the exact InfoNCE contrastive dynamics while fitting 50M+ parameter models cleanly within 6 GB VRAM.
+
+### Scaling Grid
+
+| Configuration | Layers | $d_{\text{model}}$ | Heads | $d_{\text{ff}}$ | Est. Params | Target Role / Hypothesis |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **`2L-256d`** | 2 | 256 | 8 | 1024 | ~4.23M | Ultra-lightweight edge model; checks performance floor. |
+| **`4L-256d`** | 4 | 256 | 8 | 1024 | ~7.38M | Phase 5 baseline reference (MRR 0.9383). |
+| **`6L-256d`** | 6 | 256 | 8 | 1024 | ~10.53M | Pure depth scaling with constant width. |
+| **`8L-256d`** | 8 | 256 | 8 | 1024 | ~13.68M | Deep representation capacity with low parameter overhead. |
+| **`6L-512d`** | 6 | 512 | 8 | 2048 | ~27.4M | Width + depth scaling; double hidden dimension capacity. |
+| **`8L-512d`** | 8 | 512 | 8 | 2048 | ~36.8M | High-capacity model. |
+| **`12L-512d`** | 12 | 512 | 8 | 2048 | ~54.0M | Target large-scale experiment (~54M params with BM25 hard negatives). |
+
+### Deliverables & Exit Criteria
+- [ ] VRAM profiling & throughput benchmark across all parameter tiers.
+- [ ] MLflow logging of all scale variants (MRR, Recall@1/5/10, NDCG@10, step latency, peak VRAM).
+- [ ] Pareto frontier analysis (Performance vs Latency vs Parameter Count) documented in `walkthrough.md` and `STUDY_GUIDE.md`.
+- [ ] Empirical answer to whether scaling to 54M parameters hits ~0.98 MRR on CodeSearchNet.
 
 ---
 

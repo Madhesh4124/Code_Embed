@@ -115,18 +115,39 @@ class BM25Retriever:
         self.inverted_index: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         self.idf: dict[str, float] = {}
 
-    def index(self, corpus: Sequence[str]) -> None:
+    def index(
+        self,
+        corpus: Sequence[str],
+        show_progress: bool = False,
+        progress_interval: int = 50000,
+    ) -> None:
         """Tokenize code corpus and build the inverted index.
 
         Args:
             corpus: Sequence of source code strings to index.
+            show_progress: If True, prints real-time milestone progress lines.
+            progress_interval: Step interval for progress logging.
         """
-        tokenized_corpus = [tokenize_code(doc) for doc in corpus]
+        import time
+        from collections import Counter
+
         self.corpus_size = len(corpus)
         if self.corpus_size == 0:
             return
 
-        from collections import Counter
+        t0 = time.time()
+        tokenized_corpus: list[list[str]] = []
+        for i, doc in enumerate(corpus):
+            tokenized_corpus.append(tokenize_code(doc))
+            if show_progress and ((i + 1) % progress_interval == 0 or (i + 1) == self.corpus_size):
+                pct = (i + 1) / self.corpus_size * 100.0
+                elapsed = time.time() - t0
+                speed = (i + 1) / max(elapsed, 1e-4)
+                print(
+                    f"  [BM25 Tokenize: {i+1:>7,}/{self.corpus_size:,} ({pct:>5.1f}%)] "
+                    f"Elapsed: {elapsed:>5.1f}s | Speed: {speed:>6.1f} docs/s",
+                    flush=True,
+                )
 
         doc_lens = np.array([len(doc) for doc in tokenized_corpus], dtype=np.float32)
         self.avgdl = float(np.mean(doc_lens)) if self.corpus_size > 0 else 1.0
@@ -135,6 +156,7 @@ class BM25Retriever:
         doc_freqs: dict[str, list[int]] = {}
         term_doc_counts: dict[str, list[int]] = {}
 
+        t_idx = time.time()
         for doc_id, doc_tokens in enumerate(tokenized_corpus):
             counts = Counter(doc_tokens)
             for term, count in counts.items():
@@ -143,6 +165,14 @@ class BM25Retriever:
                     term_doc_counts[term] = []
                 doc_freqs[term].append(doc_id)
                 term_doc_counts[term].append(count)
+            if show_progress and ((doc_id + 1) % progress_interval == 0 or (doc_id + 1) == self.corpus_size):
+                pct = (doc_id + 1) / self.corpus_size * 100.0
+                elapsed = time.time() - t_idx
+                print(
+                    f"  [BM25 Postings: {doc_id+1:>7,}/{self.corpus_size:,} ({pct:>5.1f}%)] "
+                    f"Elapsed: {elapsed:>5.1f}s",
+                    flush=True,
+                )
 
         self.inverted_index = {}
         self.idf = {}
@@ -153,6 +183,13 @@ class BM25Retriever:
             self.inverted_index[term] = (
                 np.array(doc_list, dtype=np.int32),
                 np.array(term_doc_counts[term], dtype=np.float32),
+            )
+
+        if show_progress:
+            print(
+                f"  [OK] BM25 Index complete: {self.corpus_size:,} docs | "
+                f"{len(self.inverted_index):,} vocab terms in {time.time() - t0:.1f}s",
+                flush=True,
             )
 
     def get_scores(self, tokenized_query: Sequence[str]) -> np.ndarray:
