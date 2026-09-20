@@ -9,6 +9,7 @@
 ---
 
 ## Table of Contents
+0. [R-Track Remediation Log (Phases R0–R4)](#0-r-track-remediation-log-phases-r0r4)
 1. [Project Overview](#1-project-overview)
 2. [Phase 0: Setup & Data Pipeline](#2-phase-0-setup--data-pipeline)
 3. [Phase 1: BM25 Baseline & Evaluation Framework](#3-phase-1-bm25-baseline--evaluation-framework)
@@ -18,6 +19,43 @@
 7. [Summary Benchmark Comparison](#7-summary-benchmark-comparison)
 8. [Comprehensive Test Suite & Quality Checks](#8-comprehensive-test-suite--quality-checks)
 9. [Next Milestone: Phase 5 (Hard Negative Mining)](#9-next-milestone-phase-5-hard-negative-mining)
+
+---
+
+## 0. R-Track Remediation Log (Phases R0–R4)
+
+### 0.1 Invalidation & Pre-Registered Protocol
+Following an audit revealing 100% docstring query leakage in historical CodeSearchNet Python splits (`hit = query in code == 100%`), all historical benchmarks were invalidated. The project transitioned to the **R-Track (Remediation Track)** governed by:
+- Pre-registered protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`, Commit `3e62e8a`)
+- Protocol errata and math extensions: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
+- Historical runs and checkpoints tagged: `data_version=leaky_v1`, `validity=INVALID_LEAKY_DATA`
+
+### 0.2 Phase R0: Clean Data Preprocessing & Dedup (Completed)
+- **Byte-accurate AST Stripping**: Dedented coordinate slicing removes docstrings while preserving indentation, inline comments, and formatting.
+- **MinHash LSH Cross-Split Dedup**: 64 permutations across 16 bands ($J \ge 0.85$) purges cross-split leakage while keeping train intact and test canonical.
+- **Output Directory**: Saved to `data/processed_clean_v2/` (preserving `data/processed/` for historical provenance).
+- **Split Yields & Clean Counts**:
+  - `train.parquet`: 360,957 samples (parse drops: 3,798 = 0.92%, syntax error drops: 283)
+  - `validation.parquet`: 20,115 samples (purged 4 MinHash near-duplicates vs train)
+  - `test.parquet`: 19,632 samples (purged 4 MinHash near-duplicates vs train)
+  - Cryptographic content hashes saved to `data/processed_clean_v2/data_hashes.json`.
+- **Pretokenization**: Saved fast binary tensors:
+  - `train_tokenized.pt` (360,957 samples, 881 MB)
+  - `validation_tokenized.pt` (20,115 samples, 49 MB)
+  - `test_tokenized.pt` (19,632 samples, 48 MB)
+- **Unit & Data Integrity Verification**: 22/22 tests passing in `tests/test_data_integrity.py` and `tests/test_bm25.py`.
+
+### 0.3 Phase R1: Clean BM25 Lexical Baseline (Completed)
+Full-corpus BM25 evaluation under Protocol v1.1 with conservative ATIRE negative-IDF floor (`method="rank_bm25"`) and generalized harmonic $\mathbb{E}[\text{RR}]$ tie-breaking:
+
+| Split | Corpus Size | Evaluated Queries | MRR | 95% Confidence Interval | Recall@1 | Recall@5 | Recall@10 | NDCG@10 | MLflow Run ID |
+|---|---|---|---|---|---|---|---|---|---|
+| **Clean Test** | 19,632 | 19,632 | **0.5108** | [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | `fb3b5313f1bb419bb330b7fc0dee6bf5` |
+| **Clean Validation** | 20,115 | 20,115 | **0.5214** | [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | `14feca9d5b024faab9da64beac12541b` |
+| *Historical Leaky Test* | 21,005 | 21,005 | *0.9498* | — | *0.9180* | — | *0.9950* | — | *INVALID* |
+
+> [!NOTE]
+> **Key Scientific Takeaway**: On clean data with docstring leakage eliminated, BM25 performance drops from the artifactual **0.9498 MRR** to a genuine **0.5108 MRR** (R@1 = 40.52%). This confirms the user critique and establishes the genuine, conservative lexical baseline for neural retrieval models.
 
 ---
 
@@ -339,9 +377,72 @@ All ablations were trained for exactly **1 epoch** (3,010 steps, batch size 128)
 ## 11. Next Milestone: Phase 6.5 (Model Capacity & Scaling Exploration)
 
 With the optimal architectural ingredients locked down (MaskedMeanPooling, $\tau=0.07$, $L=128/256$), the next milestone is **Phase 6.5: Model Capacity & Scaling Exploration**:
-* Scale depth: 2L (~4.2M), 4L (~7.38M), 6L (~10.5M), 8L (~13.7M).
-* Scale width + depth: 6L-512d (~27.4M), 8L-512d (~36.8M), 12L-512d (~54.0M) with micro-batching + gradient accumulation.
-* Test hypothesis: Can scaling model capacity with BM25 hard negatives push retrieval quality towards ~0.98 MRR on a 6 GB consumer GPU?
+---
 
+## 12. R-Track Remediation (Phases R0–R4)
 
+> [!NOTE]
+> Following the discovery of docstring-in-code query leakage in historical data, all scientific benchmarks were reset under the pre-registered protocol [`PROTOCOL.md`](PROTOCOL.md) and [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md).
 
+### 12.1 Phase R0 & R1 Milestones (Completed)
+- **Active Branch**: `r-phase` (Modular commits per remediation phase: Phase R0 and Phase R1).
+- **Phase R0 (Data Hygiene & AST Slicing)**: Clean datasets output to `data/processed_clean_v2/` with exact UTF-8 byte-range slicing on dedented code. MinHash LSH ($J \ge 0.85$) cross-split deduplication purged 4 near-duplicates from test and 4 from validation (0 exact collisions).
+- **Phase R1 (BM25 Clean Baseline & Diagnostic Battery — ATIRE Floor)**:
+  - Clean Test BM25 ($N=19,632$, evaluated strictly once): **MRR 0.5108** [0.5047, 0.5166], Recall@1 = 0.4052, Recall@5 = 0.6340, Recall@10 = 0.6993, NDCG@10 = 0.5514 (`fb3b5313f1bb419bb330b7fc0dee6bf5`).
+  - Clean Validation BM25 ($N=20,115$): **MRR 0.5214** [0.5152, 0.5275], Recall@1 = 0.4107, Recall@5 = 0.6515, Recall@10 = 0.7192, NDCG@10 = 0.5644 (`14feca9d5b024faab9da64beac12541b`).
+  - Like-for-like isolation proved docstring leakage accounted for $+0.4405$ MRR inflation on identical test items ($0.9513 \to 0.5108$).
+  - Frozen stratification established the Phase R2-B Pilot Gate threshold: Validation $\text{MRR} \ge \mathbf{0.3910}$ ($0.75 \times 0.5214$).
+
+### 12.2 Model Progression (Option 1: Faithful Phase-by-Phase)
+1. **Active Track (Our Scope)**:
+   - **Phase R2-A: Model 1 — Basic Encoder**: Train 2-epoch BaseEncoder (~7.38M params, Pre-LN, $\tau=0.07$, zero modality embeddings) with standard in-batch negatives to establish the foundational neural baseline without modality cues.
+   - **Phase R2-B: Model 2 — Shared Encoder**: Train 2-epoch SharedEncoder (~7.38M params, with learned modality embeddings). Official Pilot Gate: Val $\text{MRR} \ge \mathbf{0.3910}$. Directly isolates **RQ2**: $\Delta_{\text{modality}} = \text{MRR}_{\text{Shared}} - \text{MRR}_{\text{Basic}}$.
+   - **Phase R2-C: BM25 Hard Negative Mining**: Mine top-50 BM25 hard negatives on clean train data with 3-tier false-negative exclusion filters (identical docstring, normalized skeleton $\ge 20$ nodes, MinHash $J \ge 0.70$).
+   - **Phase R2-D: Hard Negative Retraining**: Retrain Shared Encoder with hard negatives from scratch for 2 epochs to isolate **RQ3**: $\Delta_{\text{mining}} = \text{MRR}_{\text{hard}} - \text{MRR}_{\text{in-batch}}$.
+   - **Phase R4: Ablations**: Pooling (MaskedMean vs CLS), temperature scaling, and sequence length truncation.
+2. **Teammate Track: Model 3 — Dual Encoder Baseline (Documented Handover)**:
+   - *Designated for independent execution by a teammate to investigate RQ1 (Shared vs. Dual parameter efficiency).*
+   - **Architecture**: [`DualEncoder`](file:///d:/CODE/Projects/X/model/dual_encoder.py) (~14.76M parameters across two decoupled 4-layer encoders).
+   - **Config**: [`configs/dual_clean.yaml`](file:///d:/CODE/Projects/X/configs/dual_clean.yaml).
+   - **Execution**:
+     ```powershell
+     .venv\Scripts\Activate.ps1
+     uv run python scripts/run_dual.py --config configs/dual_clean.yaml
+     uv run python evaluation/evaluate.py --model-type dual --checkpoint checkpoints/dual_clean/best_model.pt --split validation
+     ```
+   - **Research Goal**: Compare validation/test MRR against the 7.38M Shared Encoder to test whether parameter specialization justifies a 2× model footprint on leak-free data.
+
+### 12.3 Pre-Push Empirical Verification Battery (Audit Results)
+
+Prior to branching and launching Phase R2, an exhaustive empirical verification battery was conducted across data hygiene, cross-split similarity, and BM25 parity:
+
+#### 1. Exact Inverted-Index Nearest-Neighbor Jaccard Distribution
+To avoid candidate bucket bias from LSH, an exact inverted index over word 3-grams was evaluated across all **360,957 training functions** for **500 randomly sampled test functions** (`seed=42`, canonical evaluation split):
+- **Positive Control**: Caught **100/100 (100.0%)** seeded synthetic $J \ge 0.85$ near-duplicates (mean $J = 0.927$).
+- **True Nearest-Neighbor Distribution (Test vs. Train)**:
+  - Min: **0.0000** | P25: **0.0165** | Median: **0.0314** | Mean: **0.0524** | P75: **0.0558**
+  - P90: **0.1111** | P95: **0.1501** | P99: **0.3941** | Max: **0.8462**
+  - **Pairs with $J \ge 0.85$**: **0 / 500 (0.00%)**
+  - **Pairs with $J \ge 0.70$**: 2 / 500 (0.40%)
+  - **Pairs with $J \ge 0.50$**: 4 / 500 (0.80%)
+- *Scientific Conclusion & Statistical Bound*: Real Python functions share common structural idioms (yielding a median NN Jaccard of ~0.0314). Zero test functions cross the $J \ge 0.85$ deduplication threshold against the training corpus. By the rule of three, 0/500 bounds the true cross-split near-duplicate rate at $\le \mathbf{0.60\%}$ at the 95% confidence level ($p=0.05$).
+
+#### 2. Within-Split Duplicates & Kept vs. Dropped Hygiene
+- **Within-Split Duplicate Code**: Exactly **0 (0.00%)** duplicate code functions in Train (0/360,957), Validation (0/20,115), and Test (0/19,632).
+- **Within-Split Duplicate Queries**: Train = 16,552 (4.59%), Validation = 553 (2.75%), Test = 526 (2.68%) — documented for in-batch false negative masking ($M_{i,j} = \mathbb{I}(q_i == q_j)$).
+- **Code Length Distribution ($N = 10,000$ Uniform Random Sample, `seed=42`)**:
+  - Kept Code Tokens: Median = **68.0**, Mean = 104.5, P10 = 27.0, P25 = 40.0, P75 = 121.0, P90 = 212.0.
+  - Dropped Code Tokens: Median = **38.0**, Mean = 72.2, P10 = 15.0, P25 = 20.0, P75 = 79.0, P90 = 151.0.
+  - *Finding*: Dropped functions are substantially shorter (median 38 vs 68 tokens) because the $<10$ token filter, $<3$ word docstrings, and empty boilerplate files (`migrations`, `__init__.py`) selectively target minimal stubs.
+- **Top Repositories**:
+  - Kept: `saltstack/salt` (290), `materialsproject/pymatgen` (62), `brocade/pynos` (52), `mitsei/dlkit` (51), `google/grr` (49).
+  - Dropped: `StackStorm/pybind` (259), `twilio/twilio-python` (148), `saltstack/salt` (93), `mitsei/dlkit` (93), `fprimex/zdesk` (69).
+
+#### 3. BM25 Reference Parity (Full Corpus: 19,632 Docs, 2,000 Queries)
+- **Full Corpus Retrieval Evaluation**:
+  - Reference `rank_bm25.BM25Okapi`: **MRR = 0.5115**
+  - Custom `retrieval.bm25.BM25Retriever` (Robertson $\ln(\dots + 1.0)$): **MRR = 0.5005**
+  - Delta: **0.0110** (attributable to Robertson $+1.0$ smoothing vs ATIRE piecewise $\epsilon \cdot \overline{\text{IDF}}$ floor).
+  - **Decision**: Formally adopted the ATIRE floor (`method='rank_bm25'`) on the validation split as the stronger, conservative baseline (Protocol Errata §1.10).
+- **Exact Numerical Parity (`method='rank_bm25'`)**:
+  - Evaluated on 1,000 test queries: Mean Pearson score correlation = **1.000000**, Mean absolute score difference = **$3.19 \times 10^{-5}$**, Max score difference = **$0.002868 < 0.005$** (Pass), MRR difference = **0.0000** (Pass).

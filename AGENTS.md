@@ -21,9 +21,9 @@ This document outlines the operational rules, environment requirements, and work
 
 Always consult and maintain the local documentation files before starting and after finishing tasks:
 
-| Document | Purpose & Agent Action |
-|---|---|
-| [`Memory.md`](Memory.md) | **Active project state & tracker**: Check here first to see current progress, completed components, experiment logs, and immediate next actions. **Always update this file** when completing tasks, milestones, or experiments. |
+| [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md) | **Primary Research Source of Truth (R-Track)**: Active remediation state, historical leakage post-mortem, pre-registered protocol definitions, and next actionable steps. Always check this file first. |
+| [`PROTOCOL.md`](PROTOCOL.md) | **Frozen Pre-Registered Research Protocol**: Tagged `protocol-v1`. Immutable definitions, Jensen's inequality tie-breaking, MinHash LSH rules, and statistical gates. |
+| [`Memory.md`](Memory.md) | **Active project state & tracker**: Component statuses, experiment logs, and next actions. |
 | [`Phases.md`](Phases.md) | **Roadmap & Phase Specifications**: Defines Phases 0 through 8 in granular detail, including task breakdowns, deliverables, resource estimates, and strict exit criteria. |
 | [`Rules.md`](Rules.md) | **Coding & Architecture Standards**: Non-negotiable rules for code style (Ruff, typing), architecture constraints (raw PyTorch `nn.Module`, Pre-LN, no HuggingFace model wrappers for core experiments), MLflow logging, and testing requirements (80%+ coverage). |
 | [`Architecture.md`](Architecture.md) | **Technical Design**: Complete blueprint for Transformer architectures, embedding pipeline, data flow, configurations, and FAISS retrieval. |

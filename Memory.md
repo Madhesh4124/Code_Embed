@@ -5,6 +5,13 @@
 > Phases 1–6 were computed on unstripped CodeSearchNet data with 100% docstring-in-code label leakage. All historical benchmarks and conclusions below are marked invalid and superseded by the leak-free R-track (Phases R0–R4).
 
 > **Purpose**: Track what's built, what's working, what's implemented. Update after each milestone.
+>
+> 🚀 **Active Track: R-Track (Scientific Remediation)**
+> - Primary Source of Truth: [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md)
+> - Frozen Research Protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`)
+> - Protocol Errata & Deviations: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
+> - Active Branch: `r-phase`
+> - Current Milestone: **Phase R0 (Clean Data Preprocessing & Dedup)** and **Phase R1 (Clean BM25 Lexical Baseline — ATIRE)** COMPLETE. Clean Test MRR = **0.5108** (vs historical leaky 0.9498). Moving to Phase R2.
 
 ---
 
@@ -12,19 +19,13 @@
 
 | Component | Status | Last Updated | Notes |
 |-----------|--------|--------------|-------|
-| Project Setup | 🟢 Completed | 2026-09-07 | Folder tree, .gitignore, requirements.txt, and local .venv with uv & CUDA 12.4 |
-| Data Pipeline | 🟢 Completed | 2026-09-08 | 385k samples preprocessed, Dataset & Collator verified with DataLoader |
-| Tokenizer | 🟢 Completed | 2026-09-08 | 16k BPE trained on code+text; CodeEmbedTokenizer wrapper tested & verified |
-| BM25 Baseline | 🟢 Completed | 2026-09-12 | Vectorized inverted index; MRR 0.9498, R@1 0.9180, R@10 0.9950; logged to MLflow |
-| Basic Encoder | 🟢 Built & Verified | 2026-09-12 | 7.38M Pre-LN Transformer from scratch; InfoNCE loss; CUDA mixed precision training loop; 45/45 tests passing |
-| Shared Encoder | 🟢 Completed | 2026-09-13 | 7.38M Transformer + Modality embeddings; Test MRR 0.9296, R@1 0.8880, R@10 0.9840; 50/50 tests passing |
-| Dual Encoder | 🟢 Completed | 2026-09-19 | Decoupled 3-layer code & text BaseEncoders (~13.19M params); Test MRR 0.8670, R@1 0.8050, R@10 0.9620; 55/55 tests passing |
-| Hard Negatives | 🟢 Completed | 2026-09-19 | Mined 385k queries via SciPy CSR BM25; trained Shared Encoder with hard negatives (2 epochs, 0.35s/step); Test MRR 0.9383, R@1 0.9030, R@10 0.9880 (+1.5% R@1 boost); 60/60 tests passing |
-| Ablations | 🟢 Completed | 2026-09-20 | 4 controlled runs in MLflow; MaskedMeanPooling beats CLS by +4.6 MRR points; tau=0.07 optimal; L=128 yields 2x speedup with zero quality loss; 67/67 tests passing |
-| Scaling & Capacity | ⬜ Not Started | — | Phase 6.5 (~4.2M to ~54M parameter exploration within 6 GB GPU) |
-| Pretrained Baseline | ⬜ Not Started | — | Phase 7 |
-| Demo | ⬜ Not Started | — | Phase 8 |
-| Documentation | 🟢 Active | 2026-09-20 | AGENTS.md, Memory.md, STUDY_GUIDE.md, and walkthrough.md actively maintained |
+| Phase R0: Clean Data Preprocessing | 🟢 Completed | 2026-09-20 | AST byte-sliced docstrings; MinHash LSH cross-split dedup; clean Parquet + `.pt` tokenized in `data/processed_clean_v2/` |
+| Phase R1: Clean BM25 Lexical Baseline | 🟢 Completed | 2026-09-20 | ATIRE variant: Full test (19,632 queries) MRR **0.5108** [0.5047, 0.5166]; Val MRR **0.5214** [0.5152, 0.5275]; logged to MLflow |
+| Phase R2-A: Model 1 — Basic Encoder | ⬜ Ready to Launch | 2026-09-20 | 2-epoch training of BaseEncoder (~7.38M params, zero modality embeddings) on clean data |
+| Phase R2-B: Model 2 — Shared Encoder | ⬜ Pending R2-A | 2026-09-20 | SharedEncoder with learned modality embeddings; answers RQ2 (Δ_modality); Pilot Gate: Val MRR >= 0.3910 |
+| Phase R2-C: BM25 Hard Negative Mining | ⬜ Pending R2-B | 2026-09-20 | Vectorized BM25 mining on clean train split with 3-tier false negative filters |
+| Phase R2-D: Hard Negative Shared Encoder | ⬜ Pending R2-C | 2026-09-20 | Retrain from scratch (7 in-batch + 1 hard negative) for 2 epochs to isolate Δ_mining |
+| Dual Encoder (Teammate Track) | 📋 Delegated | 2026-09-20 | Model 3 handover config `configs/dual_clean.yaml` ready for independent execution by teammate (RQ1) |
 
 ---
 

@@ -73,6 +73,7 @@ scaler.update()
 ```python
 def set_seed(seed: int = 42):
     import random, numpy as np, torch
+
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -85,13 +86,13 @@ def set_seed(seed: int = 42):
 Save every epoch + best model:
 ```python
 checkpoint = {
-    'epoch': epoch,
-    'model_state_dict': model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'scheduler_state_dict': scheduler.state_dict(),
-    'scaler_state_dict': scaler.state_dict(),
-    'best_metric': best_metric,
-    'config': config,
+    "epoch": epoch,
+    "model_state_dict": model.state_dict(),
+    "optimizer_state_dict": optimizer.state_dict(),
+    "scheduler_state_dict": scheduler.state_dict(),
+    "scaler_state_dict": scaler.state_dict(),
+    "best_metric": best_metric,
+    "config": config,
 }
 torch.save(checkpoint, path)
 ```
@@ -118,7 +119,7 @@ total_norm = 0
 for p in model.parameters():
     if p.grad is not None:
         total_norm += p.grad.data.norm(2).item() ** 2
-total_norm = total_norm ** 0.5
+total_norm = total_norm**0.5
 mlflow.log_metric("grad_norm", total_norm, step=global_step)
 ```
 
@@ -168,31 +169,36 @@ mlflow.set_tag("phase", "baseline|main|ablation|final")
 
 ### Required Parameters
 ```python
-mlflow.log_params({
-    "vocab_size": 16000,
-    "d_model": 256,
-    "n_layers": 4,
-    "n_heads": 8,
-    "max_seq_len": 256,
-    "lr": 3e-4,
-    "batch_size": 256,
-    "temperature": 0.07,
-    "warmup_steps": 2000,
-    "weight_decay": 0.01,
-})
+mlflow.log_params(
+    {
+        "vocab_size": 16000,
+        "d_model": 256,
+        "n_layers": 4,
+        "n_heads": 8,
+        "max_seq_len": 256,
+        "lr": 3e-4,
+        "batch_size": 256,
+        "temperature": 0.07,
+        "warmup_steps": 2000,
+        "weight_decay": 0.01,
+    }
+)
 ```
 
 ### Required Metrics
 ```python
-mlflow.log_metrics({
-    "train_loss": ...,
-    "val_loss": ...,
-    "mrr": ...,
-    "recall_at_1": ...,
-    "recall_at_5": ...,
-    "recall_at_10": ...,
-    "ndcg": ...,
-}, step=epoch)
+mlflow.log_metrics(
+    {
+        "train_loss": ...,
+        "val_loss": ...,
+        "mrr": ...,
+        "recall_at_1": ...,
+        "recall_at_5": ...,
+        "recall_at_10": ...,
+        "ndcg": ...,
+    },
+    step=epoch,
+)
 ```
 
 ## Testing Rules
@@ -221,6 +227,7 @@ def __init__(self, vocab_size: int):
     if vocab_size < 1000:
         raise ValueError(f"vocab_size must be >= 1000, got {vocab_size}")
     self.vocab_size = vocab_size
+
 
 # Graceful degradation
 try:

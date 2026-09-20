@@ -1,5 +1,13 @@
 # CodeEmbed — Project Phases
 
+> [!CAUTION]
+> **INVALID: Historical Phases 1–6 computed on leaky data, superseded by R-track.**
+> Phases 0–6 in this document describe the original development roadmap. Following the discovery of 100% docstring query leakage in historical data, all scientific metrics and conclusions were superseded by the **R-Track (Remediation Track)**.
+> - **Primary Source of Truth**: [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md)
+> - **Pre-Registered Protocol**: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`) & [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md)
+> - **Remediation Mapping**: Phase R0 (Clean Preprocessing) $\to$ Phase R1 (BM25 Baseline) $\to$ Phase R2-A (Basic Encoder) $\to$ Phase R2-B (Shared Encoder + Pilot Gate) $\to$ Phase R2-C (Mining) $\to$ Phase R2-D (Hard Negatives) $\to$ Phase R4 (Ablations).
+> - **Active Branch**: `r-phase`
+
 ## Phase Overview
 
 | Phase | Duration | Focus | Deliverable |
@@ -285,6 +293,7 @@ class DualEncoder(nn.Module):
         self.code_encoder = BaseEncoder(config.code_encoder)
         self.text_encoder = BaseEncoder(config.text_encoder)
         # Total params ≈ 13.19M (each 3 layers, ~6.59M)
+
     def forward(self, code_ids, code_mask, text_ids, text_mask):
         z_code = self.code_encoder(code_ids, code_mask)
         z_text = self.text_encoder(text_ids, text_mask)
@@ -474,7 +483,7 @@ def main():
     query = input("Query: ")
     results = search(query, top_k=10)
     for i, (func, score) in enumerate(results):
-        print(f"{i+1}. {func[:80]}...  [{score:.3f}]")
+        print(f"{i + 1}. {func[:80]}...  [{score:.3f}]")
 ```
 
 #### 8.2 Qualitative Analysis

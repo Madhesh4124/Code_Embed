@@ -1,5 +1,9 @@
 # CodeEmbed — Product Requirements Document
 
+> [!CAUTION]
+> **INVALID: Historical Phase 1–6 metrics computed on leaky data, superseded by R-track.**
+> All historical performance metrics in this document were computed on unstripped CodeSearchNet code containing 100% docstring query leakage. All scientific answers to RQ1–RQ5 are being re-evaluated under the **R-Track (Remediation Track)** governed by [`PROTOCOL.md`](PROTOCOL.md) and tracked in [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md) on branch `r-phase`.
+
 ## Project Overview
 
 **CodeEmbed** is an empirical research project investigating contrastive representation learning for semantic code search. The project builds a from-scratch Transformer-based embedding system for natural-language → Python code retrieval, trained using contrastive learning on CodeSearchNet.

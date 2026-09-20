@@ -847,14 +847,67 @@ At $L = 256$, $L^2 = 65,536$. At $L = 128$, $L^2 = 16,384$ (**$75\%$ reduction i
 
 ### 13.4 New Portfolio & Interview Questions from Phase 6
 
-1. **Q: Why does CLS token pooling underperform Masked Mean Pooling in from-scratch Transformer encoders?**
-   * *A*: In models trained from scratch without massive masked-language-model pretraining (like BERT), the self-attention layers have not learned the complex global routing required to compress an entire sentence or AST into a single summary token (`[CLS]`). Furthermore, masked mean pooling provides an explicit gradient highway to every token representation ($\frac{1}{N} \nabla$), whereas CLS pooling creates an information bottleneck that starves downstream tokens from direct contrastive supervision. In our benchmarks, mean pooling beat CLS pooling by +4.6 MRR points (0.9296 vs 0.8836).
+---
 
-2. **Q: How does the temperature parameter $\tau$ in InfoNCE loss influence representation learning?**
-   * *A*: Temperature acts as a hardness amplifier. Small $\tau$ (e.g. 0.05) multiplies cosine similarities by 20x, making the softmax distribution peaky and magnifying gradients against the closest negatives; however, if $\tau$ is too small, it penalizes valid synonyms and soft negatives, destabilizing training. Large $\tau$ (e.g. 0.10) diffuses the distribution and dilutes gradients against deceptive hard negatives. Our ablation study proved that $\tau = 0.07$ achieves the optimal balance on CodeSearchNet.
+## 14. R-Track Scientific Remediation & Integrity Audit Deep Dive
 
-3. **Q: In an engineering deployment, how would you use ablation studies to optimize serving latency?**
-   * *A*: By conducting an input sequence length ablation ($L=256$ vs $L=128$), we proved that truncating sequences to 128 tokens retains 99.9% of retrieval quality (MRR 0.9292 vs 0.9296) while cutting attention matrix operations by 75% and doubling batch inference throughput. In production, we deploy $L=128$, cutting hardware hosting costs in half without any perceptible loss in search accuracy for users.
+Following the discovery of 100% docstring query leakage in historical data, all scientific metrics were reset. Below are the key mathematical, statistical, and engineering lessons from the remediation and integrity verification battery.
 
+---
 
+### 14.1 Exact Nearest-Neighbor Search vs. LSH Candidate Sampling
 
+When verifying cross-split deduplication, checking Jaccard similarity *only over MinHash LSH candidate buckets* creates a severe sampling bias: if the LSH hash tables yield no candidate collision for a document, its reported nearest-neighbor similarity trivially appears as $0.0000$.
+
+#### The Inverted-Index Solution:
+To determine the true distribution of nearest-neighbor similarities across the full 360,957 training functions without evaluating $500 \times 360,957 \approx 1.8 \times 10^8$ full pairwise comparisons:
+1. **Query Shingle Inversion**: Let $Q = \bigcup_{i=1}^{500} \text{shingles}(v_i)$ be the set of word 3-gram hashes appearing in the 500 validation samples (~29,630 unique hashes).
+2. **Streaming Intersection**: Stream the 360,957 training functions. For each train document $d$, compute its 3-gram shingle set and find its intersection with $Q$. For any matching shingle, accumulate the intersection count $|v_i \cap d|$.
+3. **Exact Jaccard Calculation**:
+   $$J(v_i, d) = \frac{|v_i \cap d|}{|v_i| + |d| - |v_i \cap d|}$$
+   Train functions sharing 0 shingles with $v_i$ have $J(v_i, d) = 0.0$ by definition.
+
+#### Empirical Verification Findings:
+- Natural Python syntax sharing (e.g. `def __init__(self, ...):`, `import os, sys`, `return None`) results in a realistic median nearest-neighbor Jaccard of **0.0314** (test) / **0.0303** (val) and mean of **0.0524** (test) / **0.0447** (val).
+- **Test Split Exact Nearest-Neighbor Search ($N=500$ vs $360,957$ Train)**:
+  - Max observed $J = 0.8462 < 0.8500$.
+  - **0 out of 500 test functions** exhibited $J \ge 0.85$ (0.00%).
+  - **Statistical Bound**: By the rule of three ($-\ln(0.05)/N = 3/500 = 0.006$), 0/500 bounds the true cross-split near-duplicate rate at $\le \mathbf{0.60\%}$ at the 95% confidence level ($p=0.05$).
+
+---
+
+### 14.2 BM25 IDF Formulations: Robertson Smooth vs. ATIRE Floor
+
+A key Information Retrieval nuance uncovered during benchmark parity testing is how different BM25 implementations handle high-frequency terms where document frequency $n > N / 2$:
+
+1. **Standard Sparck Jones / Okapi IDF**:
+   $$\text{IDF}(t) = \ln\left(\frac{N - n + 0.5}{n + 0.5}\right)$$
+   When a term appears in more than half the corpus ($n > N/2$), $\frac{N - n + 0.5}{n + 0.5} < 1$, causing $\text{IDF}(t) < 0$. Under naive scoring, containing a common programming keyword (like `self` or `def`) would penalize a document!
+
+2. **ATIRE Variant (`rank_bm25.BM25Okapi`)**:
+   Sets a piecewise floor on negative IDFs based on the average IDF across the vocabulary:
+   $$\text{IDF}_{\text{ATIRE}}(t) = \begin{cases} \ln\left(\frac{N - n + 0.5}{n + 0.5}\right) & \text{if } n \le N/2 \\ \epsilon \cdot \overline{\text{IDF}} & \text{if } n > N/2 \quad (\epsilon = 0.25) \end{cases}$$
+
+3. **Robertson / Lucene / BM25+ Smooth Formulation (`PROTOCOL.md`)**:
+   Adds $+1.0$ inside the natural logarithm:
+   $$\text{IDF}_{\text{Robertson}}(t) = \ln\left(1 + \frac{N - n + 0.5}{n + 0.5}\right)$$
+   This guarantees that $\text{IDF}(t) > 0$ for all frequencies without arbitrary piecewise thresholds.
+
+#### Impact on Full-Corpus Retrieval & Baseline Adoption:
+Across 19,632 test documents on 2,000 queries:
+- ATIRE (`rank_bm25`): **MRR = 0.5115**
+- Robertson Smooth (Custom): **MRR = 0.5005**
+- **Decision**: On the full validation set ($N=20,115$), ATIRE scored **0.5214 MRR** vs Robertson's **0.5120 MRR** ($\Delta = +0.0094$). To avoid claiming an artificial or cheap neural victory over a sub-optimal lexical baseline, the conservative choice is to adopt the stronger baseline. ATIRE floor was formally selected and logged in [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) §1.10.
+- When both are configured with identical IDF, the mean score difference is **$3.19 \times 10^{-5}$** and MRR matches to **0.0000** (machine precision).
+
+---
+
+### 14.3 Within-Split Duplicate Queries & In-Batch Masking
+
+While within-split duplicate code is strictly 0.00% across all splits, **4.59% of training queries (16,552 queries)** appear more than once with different code implementations (e.g., multiple repositories writing a utility function with docstring `"Get the current timestamp in UTC"`).
+
+#### Why In-Batch False Negative Masking is Critical:
+In InfoNCE contrastive training with batch size $B=128$:
+$$\mathcal{L}_i = -\log \frac{\exp(\mathbf{z}_{q_i}^\top \mathbf{z}_{c_i} / \tau)}{\sum_{j=1}^B \exp(\mathbf{z}_{q_i}^\top \mathbf{z}_{c_j} / \tau)}$$
+If document $c_j$ ($j \ne i$) was written for the identical docstring query ($q_j == q_i$), treating $c_j$ as a negative forces the model to push away a valid, semantically equivalent implementation!
+- **Hygiene Rule**: In-batch ground truth mask $M_{i,j} = \mathbb{I}(q_i == q_j)$ masks out identical-query pairs from the contrastive denominator.

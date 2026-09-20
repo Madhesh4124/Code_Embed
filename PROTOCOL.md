@@ -155,3 +155,4 @@ In `tests/test_data_integrity.py`:
 ### 3.5 Explicit Modality & Dual Encoder Scope
 - Modality embedding ablation and Dual Encoders are **not investigated in the primary remediation comparison**.
 - They are formally deferred to a post-R3 secondary extension if GPU compute and project schedule permit.
+
