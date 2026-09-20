@@ -21,8 +21,18 @@ class TestSharedEncoder:
 
     def test_parameter_count_matches_budget(self):
         """SharedEncoder should have BaseEncoder parameters + 2 * d_model modality weights."""
-        base = BaseEncoder(vocab_size=1000, d_model=64, n_layers=2, n_heads=4, d_ff=128, max_seq_len=64)
-        shared = SharedEncoder(vocab_size=1000, d_model=64, n_layers=2, n_heads=4, d_ff=128, max_seq_len=64, num_modalities=2)
+        base = BaseEncoder(
+            vocab_size=1000, d_model=64, n_layers=2, n_heads=4, d_ff=128, max_seq_len=64
+        )
+        shared = SharedEncoder(
+            vocab_size=1000,
+            d_model=64,
+            n_layers=2,
+            n_heads=4,
+            d_ff=128,
+            max_seq_len=64,
+            num_modalities=2,
+        )
 
         base_total, _ = base.get_num_params()
         shared_total, shared_trainable = shared.get_num_params()
@@ -33,7 +43,9 @@ class TestSharedEncoder:
 
     def test_forward_with_modalities_and_unit_norm(self):
         """Test forward pass with 'code' and 'text' modalities and verify unit-length outputs."""
-        model = SharedEncoder(vocab_size=500, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32)
+        model = SharedEncoder(
+            vocab_size=500, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32
+        )
         model.eval()
 
         input_ids = torch.randint(0, 500, (4, 16))
@@ -57,21 +69,33 @@ class TestSharedEncoder:
 
     def test_forward_with_integer_and_tensor_modalities(self):
         """Test forward pass with int and tensor modality specifications."""
-        model = SharedEncoder(vocab_size=200, d_model=32, n_layers=1, n_heads=2, d_ff=64, max_seq_len=32, dropout=0.0)
+        model = SharedEncoder(
+            vocab_size=200,
+            d_model=32,
+            n_layers=1,
+            n_heads=2,
+            d_ff=64,
+            max_seq_len=32,
+            dropout=0.0,
+        )
         model.eval()
         input_ids = torch.randint(0, 200, (2, 8))
 
         # Int modality
         out_int = model(input_ids, modality_ids=0)
         # Tensor modality
-        out_tensor = model(input_ids, modality_ids=torch.tensor([0, 0], dtype=torch.long))
+        out_tensor = model(
+            input_ids, modality_ids=torch.tensor([0, 0], dtype=torch.long)
+        )
 
         assert out_int.shape == (2, 32)
         assert torch.allclose(out_int, out_tensor, atol=1e-5)
 
     def test_backward_pass_gradients(self):
         """Verify backpropagation produces valid gradients for all parameters including modality embeddings."""
-        model = SharedEncoder(vocab_size=200, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32)
+        model = SharedEncoder(
+            vocab_size=200, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32
+        )
         input_ids = torch.randint(0, 200, (2, 8))
 
         z = model(input_ids, modality_ids="code")
@@ -92,7 +116,9 @@ class TestSharedEncoder:
 
     def test_invalid_modality_type(self):
         """Test invalid modality input throws TypeError."""
-        model = SharedEncoder(vocab_size=100, d_model=32, n_layers=1, n_heads=2, d_ff=32, max_seq_len=16)
+        model = SharedEncoder(
+            vocab_size=100, d_model=32, n_layers=1, n_heads=2, d_ff=32, max_seq_len=16
+        )
         input_ids = torch.randint(0, 100, (2, 4))
         with pytest.raises(TypeError, match="Unsupported modality_ids type"):
             model(input_ids, modality_ids=3.14)  # float is unsupported

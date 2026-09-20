@@ -94,7 +94,9 @@ class TestTransformer:
         assert out.shape == (3, 10, 32)
 
     def test_encoder_stack(self):
-        encoder = TransformerEncoder(n_layers=3, d_model=32, n_heads=4, d_ff=64, dropout=0.0)
+        encoder = TransformerEncoder(
+            n_layers=3, d_model=32, n_heads=4, d_ff=64, dropout=0.0
+        )
         x = torch.randn(2, 12, 32)
         out = encoder(x)
         assert out.shape == (2, 12, 32)
@@ -163,4 +165,3 @@ class TestBaseEncoder:
             if param.requires_grad:
                 assert param.grad is not None, f"Gradient missing for {name}"
                 assert not torch.isnan(param.grad).any(), f"NaN gradient in {name}"
-

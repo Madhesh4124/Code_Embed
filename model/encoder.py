@@ -8,7 +8,6 @@ This module provides BaseEncoder:
 5. L2 Normalization to unit hypersphere
 """
 
-
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -129,4 +128,3 @@ class BaseEncoder(nn.Module):
         total = sum(p.numel() for p in self.parameters())
         trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
         return total, trainable
-

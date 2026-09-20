@@ -37,7 +37,9 @@ from training.trainer import ContrastiveTrainer, get_device, set_seed
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train CodeEmbed model with Hard Negatives.")
+    parser = argparse.ArgumentParser(
+        description="Train CodeEmbed model with Hard Negatives."
+    )
     parser.add_argument(
         "--config",
         type=str,
@@ -89,14 +91,20 @@ def run_training(
         cfg.training.lr = lr_override
 
     model_name = str(cfg.model.get("name", "shared")).lower()
-    console.print(Panel.fit(f"[bold green]CodeEmbed — Phase 5: Hard Negative Mining ({model_name.capitalize()} Architecture)[/bold green]"))
+    console.print(
+        Panel.fit(
+            f"[bold green]CodeEmbed — Phase 5: Hard Negative Mining ({model_name.capitalize()} Architecture)[/bold green]"
+        )
+    )
     console.print(f"[cyan]Configuration:[/cyan] {config_path}")
 
     # 1. Reproducibility & Device
     seed = int(cfg.training.get("seed", 42))
     set_seed(seed)
     device = get_device()
-    console.print(f"[cyan]Compute Device:[/cyan] {device.type.upper()} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})")
+    console.print(
+        f"[cyan]Compute Device:[/cyan] {device.type.upper()} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})"
+    )
 
     # 2. Tokenizer & DataLoaders
     tokenizer_path = cfg.data.get("tokenizer_path", "tokenizer/tokenizer.json")
@@ -107,7 +115,9 @@ def run_training(
     hn_file = cfg.data.get("hard_negatives_file", None)
     num_hn = int(cfg.data.get("num_hard_negatives", 1))
 
-    console.print(f"[cyan]Building DataLoaders (batch_size={batch_size}, num_hard_negatives={num_hn})...[/cyan]")
+    console.print(
+        f"[cyan]Building DataLoaders (batch_size={batch_size}, num_hard_negatives={num_hn})...[/cyan]"
+    )
     train_loader = create_dataloader(
         split="train",
         tokenizer=tokenizer,
@@ -127,7 +137,9 @@ def run_training(
         num_workers=num_workers,
         max_length=int(cfg.model.max_seq_len),
     )
-    console.print(f"[green][OK][/green] Train batches: {len(train_loader):,}, Val batches: {len(val_loader):,}")
+    console.print(
+        f"[green][OK][/green] Train batches: {len(train_loader):,}, Val batches: {len(val_loader):,}"
+    )
 
     # 3. Model Architecture Instantiation
     m_cfg = cfg.model
@@ -154,7 +166,9 @@ def run_training(
         )
 
     total_p, train_p = model.get_num_params()
-    console.print(f"[green][OK][/green] Initialized model: {train_p:,} trainable params total (~{total_p / 1e6:0.2f}M).")
+    console.print(
+        f"[green][OK][/green] Initialized model: {train_p:,} trainable params total (~{total_p / 1e6:0.2f}M)."
+    )
 
     initial_best_score = -float("inf")
     if resume_checkpoint:
@@ -172,7 +186,11 @@ def run_training(
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(cfg.mlflow.experiment_name)
 
-    with mlflow.start_run(run_name=f"{cfg.mlflow.run_name}-finetune" if resume_checkpoint else cfg.mlflow.run_name) as run:
+    with mlflow.start_run(
+        run_name=f"{cfg.mlflow.run_name}-finetune"
+        if resume_checkpoint
+        else cfg.mlflow.run_name
+    ) as run:
         console.print(f"[cyan]MLflow Run ID:[/cyan] {run.info.run_id}")
         mlflow.set_tag("phase", "phase5_hard_negatives")
         mlflow.set_tag("architecture", model_name)
@@ -180,19 +198,21 @@ def run_training(
         if resume_checkpoint:
             mlflow.set_tag("resumed_from", str(resume_checkpoint))
 
-        mlflow.log_params({
-            "model_type": type(model).__name__,
-            "d_model": m_cfg.d_model,
-            "n_layers": m_cfg.n_layers,
-            "num_hard_negatives": num_hn,
-            "total_params": total_p,
-            "batch_size": batch_size,
-            "lr": cfg.training.lr,
-            "weight_decay": cfg.training.weight_decay,
-            "temperature": cfg.training.temperature,
-            "max_steps": cfg.training.max_steps,
-            "seed": seed,
-        })
+        mlflow.log_params(
+            {
+                "model_type": type(model).__name__,
+                "d_model": m_cfg.d_model,
+                "n_layers": m_cfg.n_layers,
+                "num_hard_negatives": num_hn,
+                "total_params": total_p,
+                "batch_size": batch_size,
+                "lr": cfg.training.lr,
+                "weight_decay": cfg.training.weight_decay,
+                "temperature": cfg.training.temperature,
+                "max_steps": cfg.training.max_steps,
+                "seed": seed,
+            }
+        )
 
         # 5. Launch Trainer
         trainer = ContrastiveTrainer(
@@ -206,11 +226,16 @@ def run_training(
             trainer.best_val_score = initial_best_score
 
         results = trainer.train()
-        console.print(f"[bold green]Training complete! Best Validation MRR: {results.get('best_val_mrr', 0.0):0.4f}[/bold green]")
+        console.print(
+            f"[bold green]Training complete! Best Validation MRR: {results.get('best_val_mrr', 0.0):0.4f}[/bold green]"
+        )
 
     # 6. Post-training test evaluation (in its own evaluation MLflow run)
-    console.print("\n[bold cyan]Evaluating best model on formal test benchmark...[/bold cyan]")
+    console.print(
+        "\n[bold cyan]Evaluating best model on formal test benchmark...[/bold cyan]"
+    )
     from evaluation.evaluate import evaluate_checkpoint
+
     best_ckpt = trainer.best_checkpoint_path
     if best_ckpt.exists():
         evaluate_checkpoint(

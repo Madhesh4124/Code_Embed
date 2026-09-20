@@ -81,10 +81,14 @@ class TestBM25HardNegativeMiner:
         miner = BM25HardNegativeMiner(bm25)
 
         # Query 0 corresponds to code 0 (calculate_mean)
-        negs = miner.mine_query_negatives(query="calculate mean average", true_doc_idx=0, k=2)
+        negs = miner.mine_query_negatives(
+            query="calculate mean average", true_doc_idx=0, k=2
+        )
 
         assert len(negs) == 2
-        assert 0 not in negs, "Target document index 0 must NOT be in the mined negative list!"
+        assert 0 not in negs, (
+            "Target document index 0 must NOT be in the mined negative list!"
+        )
 
     def test_miner_corpus_matrix_shape(self):
         """Miner should produce an (N, K) int32 matrix."""

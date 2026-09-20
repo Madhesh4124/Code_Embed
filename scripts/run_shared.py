@@ -36,7 +36,9 @@ from training.trainer import ContrastiveTrainer, get_device, set_seed
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train Shared Encoder on CodeSearchNet.")
+    parser = argparse.ArgumentParser(
+        description="Train Shared Encoder on CodeSearchNet."
+    )
     parser.add_argument(
         "--config",
         type=str,
@@ -59,14 +61,20 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
     if max_steps_override is not None:
         cfg.training.max_steps = max_steps_override
 
-    console.print(Panel.fit("[bold green]CodeEmbed — Phase 3: Model 2 (Shared Encoder)[/bold green]"))
+    console.print(
+        Panel.fit(
+            "[bold green]CodeEmbed — Phase 3: Model 2 (Shared Encoder)[/bold green]"
+        )
+    )
     console.print(f"[cyan]Configuration:[/cyan] {config_path}")
 
     # 1. Reproducibility
     seed = int(cfg.training.get("seed", 42))
     set_seed(seed)
     device = get_device()
-    console.print(f"[cyan]Compute Device:[/cyan] {device.type.upper()} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})")
+    console.print(
+        f"[cyan]Compute Device:[/cyan] {device.type.upper()} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})"
+    )
 
     # 2. Tokenizer & DataLoaders
     tokenizer_path = cfg.data.get("tokenizer_path", "tokenizer/tokenizer.json")
@@ -94,7 +102,9 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
         num_workers=num_workers,
         max_length=int(cfg.model.max_seq_len),
     )
-    console.print(f"[green][OK][/green] Train batches: {len(train_loader):,}, Val batches: {len(val_loader):,}")
+    console.print(
+        f"[green][OK][/green] Train batches: {len(train_loader):,}, Val batches: {len(val_loader):,}"
+    )
 
     # 3. Instantiate SharedEncoder Model
     m_cfg = cfg.model
@@ -109,7 +119,9 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
         num_modalities=int(m_cfg.get("num_modalities", 2)),
     )
     total_p, train_p = model.get_num_params()
-    console.print(f"[green][OK][/green] Initialized SharedEncoder: {train_p:,} trainable params (~{total_p / 1e6:0.2f}M).")
+    console.print(
+        f"[green][OK][/green] Initialized SharedEncoder: {train_p:,} trainable params (~{total_p / 1e6:0.2f}M)."
+    )
 
     # 4. Setup MLflow
     tracking_uri = cfg.mlflow.get("tracking_uri", "mlruns")
@@ -124,23 +136,25 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
         mlflow.set_tag("negatives", "inbatch")
 
         # Log hyperparameters
-        mlflow.log_params({
-            "model_type": "SharedEncoder",
-            "d_model": m_cfg.d_model,
-            "n_layers": m_cfg.n_layers,
-            "n_heads": m_cfg.n_heads,
-            "d_ff": m_cfg.d_ff,
-            "max_seq_len": m_cfg.max_seq_len,
-            "num_modalities": m_cfg.get("num_modalities", 2),
-            "total_params": total_p,
-            "batch_size": batch_size,
-            "lr": cfg.training.lr,
-            "weight_decay": cfg.training.weight_decay,
-            "temperature": cfg.training.temperature,
-            "max_steps": cfg.training.max_steps,
-            "warmup_steps": cfg.training.warmup_steps,
-            "seed": seed,
-        })
+        mlflow.log_params(
+            {
+                "model_type": "SharedEncoder",
+                "d_model": m_cfg.d_model,
+                "n_layers": m_cfg.n_layers,
+                "n_heads": m_cfg.n_heads,
+                "d_ff": m_cfg.d_ff,
+                "max_seq_len": m_cfg.max_seq_len,
+                "num_modalities": m_cfg.get("num_modalities", 2),
+                "total_params": total_p,
+                "batch_size": batch_size,
+                "lr": cfg.training.lr,
+                "weight_decay": cfg.training.weight_decay,
+                "temperature": cfg.training.temperature,
+                "max_steps": cfg.training.max_steps,
+                "warmup_steps": cfg.training.warmup_steps,
+                "seed": seed,
+            }
+        )
 
         # 5. Launch Trainer
         trainer = ContrastiveTrainer(
@@ -152,7 +166,9 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
         )
 
         results = trainer.train()
-        console.print(f"[bold green]Training complete! Best Validation MRR: {results.get('best_val_mrr', 0.0):0.4f}[/bold green]")
+        console.print(
+            f"[bold green]Training complete! Best Validation MRR: {results.get('best_val_mrr', 0.0):0.4f}[/bold green]"
+        )
 
 
 if __name__ == "__main__":

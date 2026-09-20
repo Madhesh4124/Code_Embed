@@ -99,7 +99,9 @@ class AblationSharedEncoder(nn.Module):
         elif pooling == "mean":
             self.pooling = MaskedMeanPooling()
         else:
-            raise ValueError(f"Unsupported pooling strategy: '{pooling}'. Choose 'mean' or 'cls'.")
+            raise ValueError(
+                f"Unsupported pooling strategy: '{pooling}'. Choose 'mean' or 'cls'."
+            )
 
         # 4. Projection Head (Linear + LayerNorm)
         # bias=False because it is immediately followed by LayerNorm
@@ -121,7 +123,9 @@ class AblationSharedEncoder(nn.Module):
             return torch.full((batch_size,), val, dtype=torch.long, device=device)
 
         if isinstance(modality_ids, int):
-            return torch.full((batch_size,), modality_ids, dtype=torch.long, device=device)
+            return torch.full(
+                (batch_size,), modality_ids, dtype=torch.long, device=device
+            )
 
         if isinstance(modality_ids, torch.Tensor):
             return modality_ids.to(device=device, dtype=torch.long)
@@ -147,7 +151,9 @@ class AblationSharedEncoder(nn.Module):
             Unit-norm FloatTensor of shape (B, D).
         """
         b_size, _ = input_ids.shape
-        mod_tensor = self._resolve_modality_ids(modality_ids, batch_size=b_size, device=input_ids.device)
+        mod_tensor = self._resolve_modality_ids(
+            modality_ids, batch_size=b_size, device=input_ids.device
+        )
 
         # 1. Embedding lookup: (B, L) -> (B, L, D)
         h = self.embeddings(input_ids, modality_ids=mod_tensor)
@@ -188,4 +194,3 @@ class AblationSharedEncoder(nn.Module):
         total = sum(p.numel() for p in self.parameters())
         trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
         return total, trainable
-

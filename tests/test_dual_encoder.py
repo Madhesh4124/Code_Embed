@@ -58,7 +58,9 @@ class TestDualEncoder:
 
     def test_forward_paired_and_unit_norm(self):
         """Forward pass with code and text pairs must return unit vectors."""
-        model = DualEncoder(vocab_size=500, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32)
+        model = DualEncoder(
+            vocab_size=500, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32
+        )
         model.eval()
 
         code_ids = torch.randint(0, 500, (4, 16))
@@ -84,7 +86,9 @@ class TestDualEncoder:
 
     def test_encode_single_modality_methods(self):
         """Test encode_code and encode_text standalone methods."""
-        model = DualEncoder(vocab_size=500, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32)
+        model = DualEncoder(
+            vocab_size=500, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32
+        )
         model.eval()
 
         ids = torch.randint(0, 500, (3, 10))
@@ -105,7 +109,9 @@ class TestDualEncoder:
 
     def test_independent_gradient_isolation(self):
         """Gradients computed on code_emb should only update code_encoder, leaving text_encoder untouched."""
-        model = DualEncoder(vocab_size=200, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32)
+        model = DualEncoder(
+            vocab_size=200, d_model=32, n_layers=2, n_heads=4, d_ff=64, max_seq_len=32
+        )
         model.train()
 
         code_ids = torch.randint(0, 200, (2, 8))
@@ -119,11 +125,15 @@ class TestDualEncoder:
 
         for name, param in model.code_encoder.named_parameters():
             if param.requires_grad:
-                assert param.grad is not None, f"Expected grad on code_encoder param {name}"
+                assert param.grad is not None, (
+                    f"Expected grad on code_encoder param {name}"
+                )
                 assert not torch.isnan(param.grad).any()
 
         for name, param in model.text_encoder.named_parameters():
-            assert param.grad is None, f"Text encoder param {name} should NOT have received gradients"
+            assert param.grad is None, (
+                f"Text encoder param {name} should NOT have received gradients"
+            )
 
         # Zero grads and test loss only on text_emb
         model.zero_grad()
@@ -132,14 +142,22 @@ class TestDualEncoder:
 
         for name, param in model.text_encoder.named_parameters():
             if param.requires_grad:
-                assert param.grad is not None, f"Expected grad on text_encoder param {name}"
+                assert param.grad is not None, (
+                    f"Expected grad on text_encoder param {name}"
+                )
                 assert not torch.isnan(param.grad).any()
 
         for name, param in model.code_encoder.named_parameters():
-            assert param.grad is None, f"Code encoder param {name} should NOT have received gradients"
+            assert param.grad is None, (
+                f"Code encoder param {name} should NOT have received gradients"
+            )
 
     def test_invalid_forward_arguments(self):
         """Calling forward with neither code_ids nor text_ids should raise ValueError."""
-        model = DualEncoder(vocab_size=100, d_model=32, n_layers=1, n_heads=2, d_ff=32, max_seq_len=16)
-        with pytest.raises(ValueError, match="At least one of code_ids or text_ids must be provided"):
+        model = DualEncoder(
+            vocab_size=100, d_model=32, n_layers=1, n_heads=2, d_ff=32, max_seq_len=16
+        )
+        with pytest.raises(
+            ValueError, match="At least one of code_ids or text_ids must be provided"
+        ):
             model(code_ids=None, text_ids=None)

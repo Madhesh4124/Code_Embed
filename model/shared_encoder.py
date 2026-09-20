@@ -110,7 +110,9 @@ class SharedEncoder(nn.Module):
             return torch.full((batch_size,), val, dtype=torch.long, device=device)
 
         if isinstance(modality_ids, int):
-            return torch.full((batch_size,), modality_ids, dtype=torch.long, device=device)
+            return torch.full(
+                (batch_size,), modality_ids, dtype=torch.long, device=device
+            )
 
         if isinstance(modality_ids, torch.Tensor):
             return modality_ids.to(device=device, dtype=torch.long)
@@ -136,7 +138,9 @@ class SharedEncoder(nn.Module):
             Unit-norm FloatTensor of shape (B, D).
         """
         B, _ = input_ids.shape
-        mod_tensor = self._resolve_modality_ids(modality_ids, batch_size=B, device=input_ids.device)
+        mod_tensor = self._resolve_modality_ids(
+            modality_ids, batch_size=B, device=input_ids.device
+        )
 
         # 1. Embedding lookup with modality: (B, L) -> (B, L, D)
         h = self.embeddings(input_ids, modality_ids=mod_tensor)

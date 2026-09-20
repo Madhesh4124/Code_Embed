@@ -74,7 +74,6 @@ if __name__ == "__main__":
     print(f"Platform:   {sys.platform}", flush=True)
     print(flush=True)
 
-
     output_path = generate_train_hard_negatives(
         k=args.k,
         split=args.split,
@@ -84,4 +83,7 @@ if __name__ == "__main__":
     )
 
     print(f"\n[OK] Done! Hard negatives saved to: {output_path}", flush=True)
-    print("Next step: run `uv run python scripts/run_hard_negatives.py --config configs/shared_hard.yaml`", flush=True)
+    print(
+        "Next step: run `uv run python scripts/run_hard_negatives.py --config configs/shared_hard.yaml`",
+        flush=True,
+    )

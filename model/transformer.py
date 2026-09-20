@@ -5,7 +5,6 @@ Pre-LN (Pre-Layer Normalization) provides stable gradient flow during training
 and eliminates the need for aggressive warmups or learning rate hacks.
 """
 
-
 import torch
 from torch import nn
 
@@ -80,7 +79,9 @@ class PreLNTransformerBlock(nn.Module):
     ) -> None:
         super().__init__()
         self.ln1 = nn.LayerNorm(d_model)
-        self.attn = MultiHeadSelfAttention(d_model=d_model, n_heads=n_heads, dropout=dropout, bias=False)
+        self.attn = MultiHeadSelfAttention(
+            d_model=d_model, n_heads=n_heads, dropout=dropout, bias=False
+        )
         self.dropout1 = nn.Dropout(dropout)
 
         self.ln2 = nn.LayerNorm(d_model)
@@ -133,15 +134,17 @@ class TransformerEncoder(nn.Module):
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
-        self.layers = nn.ModuleList([
-            PreLNTransformerBlock(
-                d_model=d_model,
-                n_heads=n_heads,
-                d_ff=d_ff,
-                dropout=dropout,
-            )
-            for _ in range(n_layers)
-        ])
+        self.layers = nn.ModuleList(
+            [
+                PreLNTransformerBlock(
+                    d_model=d_model,
+                    n_heads=n_heads,
+                    d_ff=d_ff,
+                    dropout=dropout,
+                )
+                for _ in range(n_layers)
+            ]
+        )
         # In Pre-LN architectures, a final LayerNorm is required after all blocks
         self.final_ln = nn.LayerNorm(d_model)
 
@@ -163,4 +166,3 @@ class TransformerEncoder(nn.Module):
         for layer in self.layers:
             x = layer(x, attention_mask=attention_mask)
         return self.final_ln(x)
-

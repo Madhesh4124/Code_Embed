@@ -172,4 +172,3 @@ class TestBootstrapCI:
         ci_low, ci_high = bootstrap_metric_ci([], metric_fn=mrr)
         assert ci_low == 0.0
         assert ci_high == 0.0
-

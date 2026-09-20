@@ -78,7 +78,9 @@ class BM25HardNegativeMiner:
         k1 = self.retriever.k1
         len_norm = self.retriever.len_norm
         if len_norm is None:
-            raise RuntimeError("BM25 retriever has not computed length normalization arrays.")
+            raise RuntimeError(
+                "BM25 retriever has not computed length normalization arrays."
+            )
 
         self.term_to_col = {}
         indptr = [0]
@@ -94,7 +96,9 @@ class BM25HardNegativeMiner:
             self.term_to_col[term] = col_idx
 
             # Precompute exact BM25 Okapi weights: w(t, d)
-            weights = (idf * (freqs * (k1 + 1.0)) / (freqs + len_norm[doc_ids])).astype(np.float32)
+            weights = (idf * (freqs * (k1 + 1.0)) / (freqs + len_norm[doc_ids])).astype(
+                np.float32
+            )
             all_indices.append(doc_ids)
             all_data.append(weights)
             total_nnz += len(doc_ids)
@@ -145,7 +149,11 @@ class BM25HardNegativeMiner:
             return cands
 
         # Sort query terms by IDF descending and keep top informative
-        q_term_idfs = [(t, self.retriever.idf.get(t, 0.0)) for t in set(tokens) if t in self.term_to_col]
+        q_term_idfs = [
+            (t, self.retriever.idf.get(t, 0.0))
+            for t in set(tokens)
+            if t in self.term_to_col
+        ]
         q_term_idfs.sort(key=lambda x: x[1], reverse=True)
         q_cols = [self.term_to_col[t] for t, _ in q_term_idfs[: self.max_query_terms]]
 
@@ -212,7 +220,11 @@ class BM25HardNegativeMiner:
 
         for i, q in enumerate(chunk_queries):
             toks = tokenize_text(q)
-            q_term_idfs = [(t, self.retriever.idf.get(t, 0.0)) for t in set(toks) if t in self.term_to_col]
+            q_term_idfs = [
+                (t, self.retriever.idf.get(t, 0.0))
+                for t in set(toks)
+                if t in self.term_to_col
+            ]
             q_term_idfs.sort(key=lambda x: x[1], reverse=True)
             for t, _ in q_term_idfs[: self.max_query_terms]:
                 c = self.term_to_col.get(t)
@@ -222,7 +234,13 @@ class BM25HardNegativeMiner:
 
         if q_rows and self.D_t is not None:
             Q = sp.csr_matrix(
-                (np.ones(len(q_rows), dtype=np.float32), (np.array(q_rows, dtype=np.int32), np.array(q_cols, dtype=np.int32))),
+                (
+                    np.ones(len(q_rows), dtype=np.float32),
+                    (
+                        np.array(q_rows, dtype=np.int32),
+                        np.array(q_cols, dtype=np.int32),
+                    ),
+                ),
                 shape=(b_size, V),
                 dtype=np.float32,
             )
@@ -345,7 +363,10 @@ class BM25HardNegativeMiner:
                 hard_neg_matrix[c_start : c_start + c_len] = c_res
                 completed_queries += c_len
 
-                if completed_queries % log_interval < batch_size or completed_queries == n_queries:
+                if (
+                    completed_queries % log_interval < batch_size
+                    or completed_queries == n_queries
+                ):
                     elapsed = time.time() - t0
                     speed = completed_queries / max(elapsed, 1e-4)
                     remaining = (n_queries - completed_queries) / max(speed, 1e-4)
@@ -360,7 +381,7 @@ class BM25HardNegativeMiner:
         total_elapsed = time.time() - t0
         print(
             f"[OK] Finished mining {n_queries:,} queries in {total_elapsed:.2f}s "
-            f"({n_queries/max(total_elapsed, 1e-4):.1f} q/s avg).",
+            f"({n_queries / max(total_elapsed, 1e-4):.1f} q/s avg).",
             flush=True,
         )
         return hard_neg_matrix
@@ -369,6 +390,7 @@ class BM25HardNegativeMiner:
 # ---------------------------------------------------------------------------
 # End-to-end pipeline
 # ---------------------------------------------------------------------------
+
 
 def generate_train_hard_negatives(
     k: int = 7,
@@ -405,7 +427,9 @@ def generate_train_hard_negatives(
 
     # Load or build BM25 retriever
     if index_cache_path.exists():
-        console.print(f"[cyan]Loading cached BM25 index from {index_cache_path}...[/cyan]")
+        console.print(
+            f"[cyan]Loading cached BM25 index from {index_cache_path}...[/cyan]"
+        )
         sys.stdout.flush()
         bm25 = BM25Retriever.load(str(index_cache_path))
         console.print(
@@ -414,7 +438,9 @@ def generate_train_hard_negatives(
         )
         sys.stdout.flush()
     else:
-        console.print(f"[cyan]Building BM25 index over {len(codes):,} code functions...[/cyan]")
+        console.print(
+            f"[cyan]Building BM25 index over {len(codes):,} code functions...[/cyan]"
+        )
         sys.stdout.flush()
         bm25 = BM25Retriever()
         bm25.index(codes, show_progress=True)

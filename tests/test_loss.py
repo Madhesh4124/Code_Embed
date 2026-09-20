@@ -65,4 +65,3 @@ class TestInfoNCELoss:
         assert code_emb.grad is not None
         assert not torch.isnan(text_emb.grad).any()
         assert not torch.isnan(code_emb.grad).any()
-

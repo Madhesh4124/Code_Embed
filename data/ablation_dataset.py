@@ -50,7 +50,11 @@ class AblationCodeSearchDataset(CodeSearchDataset):
         sample = super().__getitem__(idx)
 
         # Apply sequence length truncation if requested
-        if self.is_pretokenized and self.max_seq_len is not None and self.max_seq_len < 256:
+        if (
+            self.is_pretokenized
+            and self.max_seq_len is not None
+            and self.max_seq_len < 256
+        ):
             l_cut = self.max_seq_len
             sample["code_ids"] = sample["code_ids"][:l_cut]
             sample["code_mask"] = sample["code_mask"][:l_cut]
@@ -103,4 +107,3 @@ def get_ablation_dataloader(
         num_workers=num_workers,
         pin_memory=torch.cuda.is_available(),
     )
-

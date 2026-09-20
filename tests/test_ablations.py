@@ -39,7 +39,9 @@ class TestAblationModels:
         assert embs.shape == (B, D)
 
         norms = torch.norm(embs, p=2, dim=-1)
-        assert torch.allclose(norms, torch.ones(B), atol=1e-5), f"Embeddings not unit norm: {norms}"
+        assert torch.allclose(norms, torch.ones(B), atol=1e-5), (
+            f"Embeddings not unit norm: {norms}"
+        )
 
     def test_cls_pooling_gradient_flow(self) -> None:
         """Verify backward gradients propagate through all layers with CLS pooling."""
@@ -64,7 +66,9 @@ class TestAblationModels:
         for name, param in model.named_parameters():
             if param.requires_grad:
                 assert param.grad is not None, f"Parameter {name} has no gradient!"
-                assert not torch.isnan(param.grad).any(), f"Parameter {name} has NaN gradient!"
+                assert not torch.isnan(param.grad).any(), (
+                    f"Parameter {name} has NaN gradient!"
+                )
 
     def test_invalid_pooling_raises_error(self) -> None:
         """Verify passing unsupported pooling string raises ValueError."""
@@ -88,7 +92,9 @@ class TestAblationModels:
         code_embs = model.encode_code(input_ids)
         text_embs = model.encode_text(input_ids)
 
-        assert not torch.allclose(code_embs, text_embs), "Modality embeddings failed to differentiate!"
+        assert not torch.allclose(code_embs, text_embs), (
+            "Modality embeddings failed to differentiate!"
+        )
 
 
 class TestAblationDataset:
@@ -103,7 +109,9 @@ class TestAblationDataset:
         )
 
         sample = dataset_128[0]
-        assert sample["code_ids"].shape == (128,), f"Expected length 128, got {sample['code_ids'].shape}"
+        assert sample["code_ids"].shape == (128,), (
+            f"Expected length 128, got {sample['code_ids'].shape}"
+        )
         assert sample["code_mask"].shape == (128,)
         assert sample["text_ids"].shape == (128,)
         assert sample["text_mask"].shape == (128,)
@@ -117,7 +125,9 @@ class TestAblationDataset:
         )
 
         sample = dataset_256[0]
-        assert sample["code_ids"].shape == (256,), f"Expected length 256, got {sample['code_ids'].shape}"
+        assert sample["code_ids"].shape == (256,), (
+            f"Expected length 256, got {sample['code_ids'].shape}"
+        )
 
 
 class TestAblationTemperature:
@@ -135,6 +145,7 @@ class TestAblationTemperature:
         loss_010 = InfoNCEWithHardNegativesLoss(temperature=0.10)(text_emb, code_emb)
 
         # Different temperatures must produce distinctly different loss values
-        assert not torch.isclose(loss_005, loss_010), "Losses should differ across temperatures!"
+        assert not torch.isclose(loss_005, loss_010), (
+            "Losses should differ across temperatures!"
+        )
         assert loss_005.item() > 0 and loss_010.item() > 0
-

@@ -5,7 +5,6 @@ This module implements:
 - CLSPooling: Extracts the first position token representation (<BOS> / <CLS>).
 """
 
-
 import torch
 from torch import nn
 
@@ -68,4 +67,3 @@ class CLSPooling(nn.Module):
             Pooled vector of shape (B, D).
         """
         return hidden_states[:, 0, :]
-

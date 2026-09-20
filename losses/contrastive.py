@@ -5,7 +5,6 @@ objective used to align natural language text queries and code representations
 in a shared embedding space.
 """
 
-
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -31,7 +30,9 @@ class InfoNCELoss(nn.Module):
     def __init__(self, temperature: float = 0.07) -> None:
         super().__init__()
         if temperature <= 0.0:
-            raise ValueError(f"Temperature must be strictly positive, got {temperature}")
+            raise ValueError(
+                f"Temperature must be strictly positive, got {temperature}"
+            )
         self.temperature = temperature
 
     def forward(
@@ -112,7 +113,9 @@ class InfoNCEWithHardNegativesLoss(nn.Module):
     def __init__(self, temperature: float = 0.07) -> None:
         super().__init__()
         if temperature <= 0.0:
-            raise ValueError(f"Temperature must be strictly positive, got {temperature}")
+            raise ValueError(
+                f"Temperature must be strictly positive, got {temperature}"
+            )
         self.temperature = temperature
 
     def forward(
@@ -193,5 +196,3 @@ class InfoNCEWithHardNegativesLoss(nn.Module):
         t2c_acc = float((t2c_preds == targets).float().mean().item())
         c2t_acc = float((c2t_preds == targets).float().mean().item())
         return t2c_acc, c2t_acc
-
-

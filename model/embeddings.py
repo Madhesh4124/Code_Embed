@@ -7,7 +7,6 @@ This module provides:
 - EmbeddingLayer: Unified container combining token, positional, and optional modality embeddings.
 """
 
-
 import torch
 from torch import nn
 
@@ -83,7 +82,9 @@ class PositionalEmbedding(nn.Module):
             raise ValueError(
                 f"Sequence length {seq_len} exceeds max_seq_len {self.max_seq_len}"
             )
-        positions = torch.arange(seq_len, dtype=torch.long, device=device).unsqueeze(0)  # (1, L)
+        positions = torch.arange(seq_len, dtype=torch.long, device=device).unsqueeze(
+            0
+        )  # (1, L)
         return self.embedding(positions)  # (1, L, D)
 
 
@@ -191,4 +192,3 @@ class EmbeddingLayer(nn.Module):
         x = self.layer_norm(x)
         x = self.dropout(x)
         return x
-

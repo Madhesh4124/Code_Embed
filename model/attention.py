@@ -73,9 +73,21 @@ class MultiHeadSelfAttention(nn.Module):
         B, L, D = hidden_states.shape
 
         # 1. Project Q, K, V and split into heads: (B, L, D) -> (B, H, L, d_k)
-        q = self.q_proj(hidden_states).view(B, L, self.n_heads, self.d_k).transpose(1, 2)
-        k = self.k_proj(hidden_states).view(B, L, self.n_heads, self.d_k).transpose(1, 2)
-        v = self.v_proj(hidden_states).view(B, L, self.n_heads, self.d_k).transpose(1, 2)
+        q = (
+            self.q_proj(hidden_states)
+            .view(B, L, self.n_heads, self.d_k)
+            .transpose(1, 2)
+        )
+        k = (
+            self.k_proj(hidden_states)
+            .view(B, L, self.n_heads, self.d_k)
+            .transpose(1, 2)
+        )
+        v = (
+            self.v_proj(hidden_states)
+            .view(B, L, self.n_heads, self.d_k)
+            .transpose(1, 2)
+        )
 
         # Fast path: leverage PyTorch F.scaled_dot_product_attention (FlashAttention /
         # fused memory-efficient attention) when explicit attention weights are not requested.
@@ -119,4 +131,3 @@ class MultiHeadSelfAttention(nn.Module):
         output = self.out_proj(context)
 
         return output, attn_weights
-
