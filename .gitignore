@@ -13,6 +13,7 @@ ENV/
 # Data & Datasets
 data/raw/
 data/processed/
+data/processed_clean_v2/
 *.parquet
 *.jsonl
 *.csv

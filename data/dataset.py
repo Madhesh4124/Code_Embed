@@ -91,7 +91,9 @@ class CodeSearchDataset(Dataset):
             }
             if self.hard_neg_indices is not None:
                 hn_idxs = self.hard_neg_indices[idx][: self.num_hard_negatives].tolist()
-                sample["hard_neg_codes"] = [self.df.iloc[hn_i]["code"] for hn_i in hn_idxs]
+                sample["hard_neg_codes"] = [
+                    self.df.iloc[hn_i]["code"] for hn_i in hn_idxs
+                ]
             return sample
 
 
@@ -120,8 +122,12 @@ class CodeSearchCollator:
 
             if "hard_neg_code_ids" in batch[0]:
                 # Shape: (B, K, L) -> stacked directly
-                batch_dict["hard_neg_code_ids"] = torch.stack([item["hard_neg_code_ids"] for item in batch])
-                batch_dict["hard_neg_code_mask"] = torch.stack([item["hard_neg_code_mask"] for item in batch])
+                batch_dict["hard_neg_code_ids"] = torch.stack(
+                    [item["hard_neg_code_ids"] for item in batch]
+                )
+                batch_dict["hard_neg_code_mask"] = torch.stack(
+                    [item["hard_neg_code_mask"] for item in batch]
+                )
 
             return batch_dict
 
@@ -163,8 +169,12 @@ class CodeSearchCollator:
                 modality="code",
             )
             k = len(batch[0]["hard_neg_codes"])
-            batch_dict["hard_neg_code_ids"] = hn_batch["input_ids"].view(len(batch), k, -1)
-            batch_dict["hard_neg_code_mask"] = hn_batch["attention_mask"].view(len(batch), k, -1)
+            batch_dict["hard_neg_code_ids"] = hn_batch["input_ids"].view(
+                len(batch), k, -1
+            )
+            batch_dict["hard_neg_code_mask"] = hn_batch["attention_mask"].view(
+                len(batch), k, -1
+            )
 
         return batch_dict
 

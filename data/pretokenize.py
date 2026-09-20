@@ -33,12 +33,13 @@ from rich.progress import (
 
 from tokenizer.tokenizer import CodeEmbedTokenizer
 
-PROCESSED_DIR = Path("data/processed")
+PROCESSED_DIR = Path("data/processed_clean_v2")
 
 
 def pretokenize_split(
     split: str,
     tokenizer: CodeEmbedTokenizer,
+    data_dir: Path = PROCESSED_DIR,
     max_length: int = 256,
     batch_size: int = 4096,
 ) -> Path:
@@ -47,6 +48,7 @@ def pretokenize_split(
     Args:
         split: Split name ('train', 'validation', 'test').
         tokenizer: Initialized CodeEmbedTokenizer.
+        data_dir: Directory containing parquet files and output location.
         max_length: Fixed sequence length (default: 256).
         batch_size: Batch size for HuggingFace fast Rust tokenizer encode_batch.
 
@@ -54,13 +56,16 @@ def pretokenize_split(
         Path to the saved pre-tokenized .pt file.
     """
     console = Console()
-    input_file = PROCESSED_DIR / f"{split}.parquet"
-    output_file = PROCESSED_DIR / f"{split}_tokenized.pt"
+    data_dir = Path(data_dir)
+    input_file = data_dir / f"{split}.parquet"
+    output_file = data_dir / f"{split}_tokenized.pt"
 
     if not input_file.exists():
         raise FileNotFoundError(f"Input parquet split not found at: {input_file}")
 
-    console.print(f"\n[bold cyan]Pre-tokenizing split: {split}[/bold cyan] ({input_file})")
+    console.print(
+        f"\n[bold cyan]Pre-tokenizing split: {split}[/bold cyan] ({input_file})"
+    )
     df = pd.read_parquet(input_file)
     total_samples = len(df)
     console.print(f"Total samples to process: [bold]{total_samples:,}[/bold]")
@@ -121,7 +126,9 @@ def pretokenize_split(
         "text_mask": torch.cat(all_text_mask, dim=0),
     }
 
-    console.print(f"[cyan]Saving pre-tokenized tensor artifact to {output_file}...[/cyan]")
+    console.print(
+        f"[cyan]Saving pre-tokenized tensor artifact to {output_file}...[/cyan]"
+    )
     torch.save(final_dict, output_file)
 
     duration = time.time() - start_time
@@ -134,20 +141,38 @@ def pretokenize_split(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Pre-tokenize CodeSearchNet dataset splits.")
+    parser = argparse.ArgumentParser(
+        description="Pre-tokenize CodeSearchNet dataset splits."
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/processed_clean_v2",
+        help="Directory containing parquet splits (default: data/processed_clean_v2).",
+    )
     parser.add_argument(
         "--splits",
         nargs="+",
         default=["train", "validation", "test"],
         help="Dataset splits to tokenize.",
     )
-    parser.add_argument("--max-length", type=int, default=256, help="Maximum sequence length.")
-    parser.add_argument("--batch-size", type=int, default=8192, help="Batch size for tokenizer.")
+    parser.add_argument(
+        "--max-length", type=int, default=256, help="Maximum sequence length."
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=8192, help="Batch size for tokenizer."
+    )
     args = parser.parse_args()
 
     tokenizer = CodeEmbedTokenizer()
     for s in args.splits:
-        pretokenize_split(split=s, tokenizer=tokenizer, max_length=args.max_length, batch_size=args.batch_size)
+        pretokenize_split(
+            split=s,
+            tokenizer=tokenizer,
+            data_dir=Path(args.data_dir),
+            max_length=args.max_length,
+            batch_size=args.batch_size,
+        )
 
 
 if __name__ == "__main__":
