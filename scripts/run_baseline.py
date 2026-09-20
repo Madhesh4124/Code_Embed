@@ -10,6 +10,7 @@ This script:
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -39,7 +40,9 @@ from retrieval.bm25 import BM25Retriever
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run BM25 baseline evaluation on CodeSearchNet test set.")
+    parser = argparse.ArgumentParser(
+        description="Run BM25 baseline evaluation on CodeSearchNet test set."
+    )
     parser.add_argument(
         "--config",
         type=str,
@@ -53,7 +56,11 @@ def run_baseline(config_path: str) -> None:
     console = Console()
     cfg = OmegaConf.load(config_path)
 
-    console.print(Panel.fit("[bold green]CodeEmbed — Phase 1: BM25 Lexical Baseline Benchmark[/bold green]"))
+    console.print(
+        Panel.fit(
+            "[bold green]CodeEmbed — Phase 1: BM25 Lexical Baseline Benchmark[/bold green]"
+        )
+    )
     console.print(f"[cyan]Configuration:[/cyan] {config_path}")
 
     # 1. Load test data
@@ -66,7 +73,9 @@ def run_baseline(config_path: str) -> None:
     corpus = df["code"].tolist()
     all_queries = df["docstring"].tolist()
     corpus_size = len(corpus)
-    console.print(f"[green][OK][/green] Loaded {corpus_size:,} code snippets and docstring pairs.")
+    console.print(
+        f"[green][OK][/green] Loaded {corpus_size:,} code snippets and docstring pairs."
+    )
 
     # 2. Sample queries if specified
     sample_size: int | None = cfg.data.get("sample_size", None)
@@ -75,16 +84,25 @@ def run_baseline(config_path: str) -> None:
         sampled_indices = rng.choice(corpus_size, size=sample_size, replace=False)
         queries = [all_queries[idx] for idx in sampled_indices]
         ground_truth = sampled_indices.tolist()
-        console.print(f"[yellow]Evaluating on representative sample of {sample_size:,} queries against full {corpus_size:,} code corpus (seed={cfg.data.seed}).[/yellow]")
+        console.print(
+            f"[yellow]Evaluating on representative sample of {sample_size:,} queries against full {corpus_size:,} code corpus (seed={cfg.data.seed}).[/yellow]"
+        )
     else:
         queries = all_queries
         ground_truth = list(range(corpus_size))
-        console.print(f"[yellow]Evaluating all {corpus_size:,} queries against full corpus.[/yellow]")
+        console.print(
+            f"[yellow]Evaluating all {corpus_size:,} queries against full corpus.[/yellow]"
+        )
 
     # 3. Build BM25 Index
-    console.print(f"[cyan]Building BM25 index with k1={cfg.bm25.k1}, b={cfg.bm25.b}...[/cyan]")
+    console.print(
+        f"[cyan]Building BM25 index with k1={cfg.bm25.k1}, b={cfg.bm25.b}...[/cyan]"
+    )
     start_index_time = time.time()
-    retriever = BM25Retriever(k1=float(cfg.bm25.k1), b=float(cfg.bm25.b))
+    method = cfg.bm25.get("method", "rank_bm25")
+    retriever = BM25Retriever(
+        k1=float(cfg.bm25.k1), b=float(cfg.bm25.b), method=str(method)
+    )
     retriever.index(corpus)
     index_duration = time.time() - start_index_time
     console.print(f"[green][OK][/green] Index built in {index_duration:0.2f}s.")
@@ -106,10 +124,14 @@ def run_baseline(config_path: str) -> None:
     )
     query_duration = time.time() - start_query_time
     qps = len(queries) / max(query_duration, 1e-6)
-    console.print(f"[green][OK][/green] Completed retrieval in {query_duration:0.2f}s ({qps:0.1f} queries/sec).")
+    console.print(
+        f"[green][OK][/green] Completed retrieval in {query_duration:0.2f}s ({qps:0.1f} queries/sec)."
+    )
 
     # 5. Compute Metrics & Confidence Intervals
-    console.print("[cyan]Computing IR metrics and 1,000 bootstrap confidence intervals...[/cyan]")
+    console.print(
+        "[cyan]Computing IR metrics and 1,000 bootstrap confidence intervals...[/cyan]"
+    )
     results = evaluate_rankings(
         ranks=ranks,
         ks=[1, 5, 10],
@@ -119,10 +141,16 @@ def run_baseline(config_path: str) -> None:
     )
 
     # 6. Display Results Table
-    table = Table(title="BM25 Lexical Baseline Benchmark Results", show_header=True, header_style="bold magenta")
+    table = Table(
+        title="BM25 Lexical Baseline Benchmark Results",
+        show_header=True,
+        header_style="bold magenta",
+    )
     table.add_column("Metric", style="dim", width=12)
     table.add_column("Score", justify="right", style="bold green", width=10)
-    table.add_column("95% Confidence Interval", justify="center", style="cyan", width=26)
+    table.add_column(
+        "95% Confidence Interval", justify="center", style="cyan", width=26
+    )
 
     scalar_metrics = {k: v for k, v in results.items() if not k.endswith("_ci")}
     for metric_name, score in scalar_metrics.items():
@@ -140,21 +168,59 @@ def run_baseline(config_path: str) -> None:
     mlflow.set_experiment(cfg.mlflow.experiment_name)
 
     with mlflow.start_run(run_name=cfg.mlflow.run_name) as run:
-        console.print(f"[cyan]Logging run to MLflow (Run ID: {run.info.run_id})...[/cyan]")
+        console.print(
+            f"[cyan]Logging run to MLflow (Run ID: {run.info.run_id})...[/cyan]"
+        )
+
+        # Protocol v1.1 Tags & Provenance
+        data_hash = ""
+        tokenizer_hash = ""
+        hash_file = Path("data/processed_clean_v2/data_hashes.json")
+        if hash_file.exists():
+            with open(hash_file) as hf:
+                hashes = json.load(hf)
+                data_hash = hashes.get("test.parquet", "")
+                tokenizer_hash = hashes.get("tokenizer_provenance_train_hash", "")
+
+        git_sha = "unknown"
+        try:
+            import subprocess
+
+            git_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], text=True
+            ).strip()
+        except (subprocess.SubprocessError, OSError):
+            git_sha = "unknown"
+
+        mlflow.set_tags(
+            {
+                "data_version": "clean_v2",
+                "protocol_version": "v1.1",
+                "validity": "VALID_REMEDIATED",
+                "test_data_sha256": data_hash,
+                "git_commit_sha": git_sha,
+                "tokenizer_provenance_train_hash": tokenizer_hash,
+            }
+        )
 
         # Log params
-        mlflow.log_params({
-            "model_type": "BM25Okapi",
-            "k1": cfg.bm25.k1,
-            "b": cfg.bm25.b,
-            "corpus_size": corpus_size,
-            "num_evaluated_queries": len(queries),
-            "sample_size": str(sample_size),
-            "bootstrap_resamples": cfg.evaluation.bootstrap_resamples,
-            "index_duration_sec": round(index_duration, 2),
-            "query_duration_sec": round(query_duration, 2),
-            "queries_per_sec": round(qps, 1),
-        })
+        mlflow.log_params(
+            {
+                "model_type": "BM25Okapi",
+                "k1": cfg.bm25.k1,
+                "b": cfg.bm25.b,
+                "corpus_size": corpus_size,
+                "num_evaluated_queries": len(queries),
+                "sample_size": str(sample_size),
+                "bootstrap_resamples": cfg.evaluation.bootstrap_resamples,
+                "index_duration_sec": round(index_duration, 2),
+                "query_duration_sec": round(query_duration, 2),
+                "queries_per_sec": round(qps, 1),
+                "test_data_sha256": data_hash,
+                "git_commit_sha": git_sha,
+                "tokenizer_provenance_train_hash": tokenizer_hash,
+            }
+        )
 
         # Log scalar metrics (replace '@' with '_at_' for MLflow compliance)
         for metric_name, score in scalar_metrics.items():
@@ -179,15 +245,18 @@ def run_baseline(config_path: str) -> None:
             f.write(f"- **Corpus Size**: {corpus_size:,}\n")
             f.write(f"- **Evaluated Queries**: {len(queries):,}\n")
             f.write(f"- **Index Time**: {index_duration:0.2f}s\n")
-            f.write(f"- **Retrieval Time**: {query_duration:0.2f}s ({qps:0.1f} QPS)\n\n")
+            f.write(
+                f"- **Retrieval Time**: {query_duration:0.2f}s ({qps:0.1f} QPS)\n\n"
+            )
             f.write("## Retrieval Metrics\n\n")
             f.write(summary_md + "\n")
 
         mlflow.log_artifact(str(summary_path))
-        console.print(f"[green][OK][/green] Successfully logged metrics and artifacts to MLflow experiment '{cfg.mlflow.experiment_name}'.")
+        console.print(
+            f"[green][OK][/green] Successfully logged metrics and artifacts to MLflow experiment '{cfg.mlflow.experiment_name}'."
+        )
 
 
 if __name__ == "__main__":
     args = parse_args()
     run_baseline(args.config)
-

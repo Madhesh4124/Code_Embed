@@ -148,7 +148,9 @@ def format_metrics_summary(
         ci_key = f"{key}_ci"
         if ci_key in results:
             ci_low, ci_high = results[ci_key]  # type: ignore
-            lines.append(f"| {key.upper():<12} | {score:0.4f} | [{ci_low:0.4f}, {ci_high:0.4f}] |")
+            lines.append(
+                f"| {key.upper():<12} | {score:0.4f} | [{ci_low:0.4f}, {ci_high:0.4f}] |"
+            )
         else:
             lines.append(f"| {key.upper():<12} | {score:0.4f} | — |")
 
@@ -184,7 +186,9 @@ def evaluate_checkpoint(
 
     console = Console()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    console.print(f"[cyan]Evaluating checkpoint on device:[/cyan] {device.type.upper()}")
+    console.print(
+        f"[cyan]Evaluating checkpoint on device:[/cyan] {device.type.upper()}"
+    )
 
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found at: {checkpoint_path}")
@@ -231,7 +235,9 @@ def evaluate_checkpoint(
 
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
-    console.print(f"[green][OK][/green] Loaded {model_type} weights from {checkpoint_path} (epoch {checkpoint.get('epoch', '?')})")
+    console.print(
+        f"[green][OK][/green] Loaded {model_type} weights from {checkpoint_path} (epoch {checkpoint.get('epoch', '?')})"
+    )
 
     # Build DataLoader for corpus and queries
     tokenizer = CodeEmbedTokenizer()
@@ -260,8 +266,12 @@ def evaluate_checkpoint(
                     c_emb = model.encode_code(code_ids, attention_mask=code_mask)
                     t_emb = model.encode_text(text_ids, attention_mask=text_mask)
                 elif model_type == "shared":
-                    c_emb = model(code_ids, attention_mask=code_mask, modality_ids="code")
-                    t_emb = model(text_ids, attention_mask=text_mask, modality_ids="text")
+                    c_emb = model(
+                        code_ids, attention_mask=code_mask, modality_ids="code"
+                    )
+                    t_emb = model(
+                        text_ids, attention_mask=text_mask, modality_ids="text"
+                    )
                 else:
                     c_emb = model(code_ids, attention_mask=code_mask)
                     t_emb = model(text_ids, attention_mask=text_mask)
@@ -280,11 +290,15 @@ def evaluate_checkpoint(
         sampled_indices = rng.choice(total_docs, size=sample_size, replace=False)
         eval_queries = query_embeddings[sampled_indices]
         ground_truth = sampled_indices.tolist()
-        console.print(f"[yellow]Evaluating {sample_size:,} sampled queries against full {total_docs:,} corpus (seed={seed}).[/yellow]")
+        console.print(
+            f"[yellow]Evaluating {sample_size:,} sampled queries against full {total_docs:,} corpus (seed={seed}).[/yellow]"
+        )
     else:
         eval_queries = query_embeddings
         ground_truth = list(range(total_docs))
-        console.print(f"[yellow]Evaluating all {total_docs:,} queries against full corpus.[/yellow]")
+        console.print(
+            f"[yellow]Evaluating all {total_docs:,} queries against full corpus.[/yellow]"
+        )
 
     console.print("[cyan]Computing similarity rankings...[/cyan]")
     ranks = compute_similarity_rankings(
@@ -295,13 +309,20 @@ def evaluate_checkpoint(
     )
 
     console.print("[cyan]Computing evaluation metrics & 1,000 bootstrap CIs...[/cyan]")
-    results = evaluate_rankings(ranks, ks=[1, 5, 10], bootstrap_resamples=1000, seed=seed)
+    results = evaluate_rankings(
+        ranks, ks=[1, 5, 10], bootstrap_resamples=1000, seed=seed
+    )
 
     # Print table
-    table = Table(title=f"Neural Evaluation Benchmark ({Path(checkpoint_path).name} on {split})", header_style="bold magenta")
+    table = Table(
+        title=f"Neural Evaluation Benchmark ({Path(checkpoint_path).name} on {split})",
+        header_style="bold magenta",
+    )
     table.add_column("Metric", style="dim", width=12)
     table.add_column("Score", justify="right", style="bold green", width=10)
-    table.add_column("95% Confidence Interval", justify="center", style="cyan", width=26)
+    table.add_column(
+        "95% Confidence Interval", justify="center", style="cyan", width=26
+    )
 
     scalar_metrics = {k: v for k, v in results.items() if not k.endswith("_ci")}
     for metric_name, score in scalar_metrics.items():
@@ -318,13 +339,15 @@ def evaluate_checkpoint(
     mlflow.set_tracking_uri("mlruns")
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=f"eval-{Path(checkpoint_path).stem}-{split}"):
-        mlflow.log_params({
-            "checkpoint": checkpoint_path,
-            "split": split,
-            "corpus_size": total_docs,
-            "num_evaluated_queries": len(eval_queries),
-            "sample_size": str(sample_size),
-        })
+        mlflow.log_params(
+            {
+                "checkpoint": checkpoint_path,
+                "split": split,
+                "corpus_size": total_docs,
+                "num_evaluated_queries": len(eval_queries),
+                "sample_size": str(sample_size),
+            }
+        )
         for k, v in scalar_metrics.items():
             mlflow.log_metric(k.replace("@", "_at_"), float(v))
         for k in scalar_metrics:
@@ -340,11 +363,31 @@ def evaluate_checkpoint(
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Evaluate model checkpoint on CodeSearchNet.")
-    parser.add_argument("--checkpoint", type=str, required=True, help="Path to model checkpoint (.pt).")
-    parser.add_argument("--split", type=str, default="test", help="Split to evaluate on ('test' or 'validation').")
-    parser.add_argument("--sample-size", type=int, default=1000, help="Number of queries to evaluate (default: 1000).")
-    parser.add_argument("--batch-size", type=int, default=128, help="Batch size for embedding generation.")
+
+    parser = argparse.ArgumentParser(
+        description="Evaluate model checkpoint on CodeSearchNet."
+    )
+    parser.add_argument(
+        "--checkpoint", type=str, required=True, help="Path to model checkpoint (.pt)."
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="test",
+        help="Split to evaluate on ('test' or 'validation').",
+    )
+    parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=1000,
+        help="Number of queries to evaluate (default: 1000).",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=128,
+        help="Batch size for embedding generation.",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     args = parser.parse_args()
 
@@ -355,4 +398,3 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         seed=args.seed,
     )
-

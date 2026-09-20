@@ -100,15 +100,20 @@ class BM25Retriever:
         idf: Mapping from term to precomputed Okapi IDF.
     """
 
-    def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
+    def __init__(
+        self, k1: float = 1.5, b: float = 0.75, method: str = "robertson"
+    ) -> None:
         """Initialize BM25Retriever with tuning parameters.
 
         Args:
             k1: Term frequency saturation constant (typically 1.2 - 2.0).
             b: Document length normalization constant (typically 0.75).
+            method: IDF formulation - 'robertson' (Lucene/BM25+ non-negative smooth)
+                    or 'atire' / 'rank_bm25' (ATIRE epsilon floor).
         """
         self.k1 = k1
         self.b = b
+        self.method = method.lower()
         self.corpus_size: int = 0
         self.avgdl: float = 0.0
         self.len_norm: np.ndarray | None = None
@@ -139,19 +144,23 @@ class BM25Retriever:
         tokenized_corpus: list[list[str]] = []
         for i, doc in enumerate(corpus):
             tokenized_corpus.append(tokenize_code(doc))
-            if show_progress and ((i + 1) % progress_interval == 0 or (i + 1) == self.corpus_size):
+            if show_progress and (
+                (i + 1) % progress_interval == 0 or (i + 1) == self.corpus_size
+            ):
                 pct = (i + 1) / self.corpus_size * 100.0
                 elapsed = time.time() - t0
                 speed = (i + 1) / max(elapsed, 1e-4)
                 print(
-                    f"  [BM25 Tokenize: {i+1:>7,}/{self.corpus_size:,} ({pct:>5.1f}%)] "
+                    f"  [BM25 Tokenize: {i + 1:>7,}/{self.corpus_size:,} ({pct:>5.1f}%)] "
                     f"Elapsed: {elapsed:>5.1f}s | Speed: {speed:>6.1f} docs/s",
                     flush=True,
                 )
 
         doc_lens = np.array([len(doc) for doc in tokenized_corpus], dtype=np.float32)
         self.avgdl = float(np.mean(doc_lens)) if self.corpus_size > 0 else 1.0
-        self.len_norm = self.k1 * (1.0 - self.b + self.b * (doc_lens / max(self.avgdl, 1e-6)))
+        self.len_norm = self.k1 * (
+            1.0 - self.b + self.b * (doc_lens / max(self.avgdl, 1e-6))
+        )
 
         doc_freqs: dict[str, list[int]] = {}
         term_doc_counts: dict[str, list[int]] = {}
@@ -165,25 +174,48 @@ class BM25Retriever:
                     term_doc_counts[term] = []
                 doc_freqs[term].append(doc_id)
                 term_doc_counts[term].append(count)
-            if show_progress and ((doc_id + 1) % progress_interval == 0 or (doc_id + 1) == self.corpus_size):
+            if show_progress and (
+                (doc_id + 1) % progress_interval == 0
+                or (doc_id + 1) == self.corpus_size
+            ):
                 pct = (doc_id + 1) / self.corpus_size * 100.0
                 elapsed = time.time() - t_idx
                 print(
-                    f"  [BM25 Postings: {doc_id+1:>7,}/{self.corpus_size:,} ({pct:>5.1f}%)] "
+                    f"  [BM25 Postings: {doc_id + 1:>7,}/{self.corpus_size:,} ({pct:>5.1f}%)] "
                     f"Elapsed: {elapsed:>5.1f}s",
                     flush=True,
                 )
 
         self.inverted_index = {}
         self.idf = {}
-        for term, doc_list in doc_freqs.items():
-            n = len(doc_list)
-            idf_val = float(np.log((self.corpus_size - n + 0.5) / (n + 0.5) + 1.0))
-            self.idf[term] = idf_val
-            self.inverted_index[term] = (
-                np.array(doc_list, dtype=np.int32),
-                np.array(term_doc_counts[term], dtype=np.float32),
-            )
+        if self.method in {"atire", "rank_bm25"}:
+            negative_idfs = []
+            idf_sum = 0.0
+            for term, doc_list in doc_freqs.items():
+                n = len(doc_list)
+                raw_idf = float(np.log((self.corpus_size - n + 0.5) / (n + 0.5)))
+                self.idf[term] = raw_idf
+                idf_sum += raw_idf
+                if raw_idf < 0:
+                    negative_idfs.append(term)
+                self.inverted_index[term] = (
+                    np.array(doc_list, dtype=np.int32),
+                    np.array(term_doc_counts[term], dtype=np.float32),
+                )
+            avg_idf = idf_sum / max(len(self.idf), 1)
+            eps = 0.25 * avg_idf
+            for term in negative_idfs:
+                self.idf[term] = eps
+        else:
+            # Default Robertson / Lucene non-negative formulation (Protocol v1)
+            for term, doc_list in doc_freqs.items():
+                n = len(doc_list)
+                idf_val = float(np.log((self.corpus_size - n + 0.5) / (n + 0.5) + 1.0))
+                self.idf[term] = idf_val
+                self.inverted_index[term] = (
+                    np.array(doc_list, dtype=np.int32),
+                    np.array(term_doc_counts[term], dtype=np.float32),
+                )
 
         if show_progress:
             print(
@@ -211,7 +243,9 @@ class BM25Retriever:
                 continue
             doc_ids, freqs = posting
             idf_val = self.idf[term]
-            scores[doc_ids] += idf_val * (freqs * (self.k1 + 1.0)) / (freqs + self.len_norm[doc_ids])
+            scores[doc_ids] += (
+                idf_val * (freqs * (self.k1 + 1.0)) / (freqs + self.len_norm[doc_ids])
+            )
 
         return scores
 
@@ -276,9 +310,17 @@ class BM25Retriever:
         if self.len_norm is None:
             raise RuntimeError("Index has not been built. Call index() first.")
         if len(queries) != len(ground_truth_indices):
-            raise ValueError("queries and ground_truth_indices must have identical length.")
+            raise ValueError(
+                "queries and ground_truth_indices must have identical length."
+            )
 
         ranks = np.full(len(queries), fill_value=np.inf, dtype=np.float64)
+
+        # Precompute harmonic numbers H_n = sum_{k=1}^n 1/k for exact expected RR under ties
+        harmonic_table = np.zeros(self.corpus_size + 1, dtype=np.float64)
+        harmonic_table[1:] = np.cumsum(
+            1.0 / np.arange(1, self.corpus_size + 1, dtype=np.float64)
+        )
 
         for i, (query, gt_idx) in enumerate(zip(queries, ground_truth_indices)):
             tokenized_query = tokenize_text(query)
@@ -292,8 +334,19 @@ class BM25Retriever:
                 continue
 
             higher_count = int(np.sum(scores > target_score))
-            tie_count = int(np.sum(scores == target_score)) - 1
-            rank = higher_count + 1 + 0.5 * max(0, tie_count)
+            eq_count = int(np.sum(scores == target_score))
+            if eq_count <= 0:
+                eq_count = 1
+
+            # Protocol v1.1 & Errata 1.3: Generalized Harmonic Expected Reciprocal Rank under ties
+            if eq_count > 1:
+                expected_rr = (
+                    harmonic_table[higher_count + eq_count]
+                    - harmonic_table[higher_count]
+                ) / eq_count
+                rank = 1.0 / expected_rr if expected_rr > 0 else np.inf
+            else:
+                rank = float(higher_count + 1)
 
             if max_candidates is None or rank <= max_candidates:
                 ranks[i] = rank

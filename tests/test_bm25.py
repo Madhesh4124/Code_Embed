@@ -49,7 +49,15 @@ class TestTokenization:
     def test_text_tokenization(self):
         text = "Calculate the L2-norm between two matrices."
         tokens = tokenize_text(text)
-        assert tokens == ["calculate", "the", "l2", "norm", "between", "two", "matrices"]
+        assert tokens == [
+            "calculate",
+            "the",
+            "l2",
+            "norm",
+            "between",
+            "two",
+            "matrices",
+        ]
 
 
 class TestBM25Retriever:
@@ -125,4 +133,3 @@ class TestBM25Retriever:
         assert loaded.corpus_size == 4
         indices, _ = loaded.search("binary search", top_k=1)
         assert indices[0] == 3
-

@@ -198,4 +198,3 @@ def bootstrap_metric_ci(
     ci_upper = float(np.percentile(bootstrap_scores, upper_percentile))
 
     return (ci_lower, ci_upper)
-
