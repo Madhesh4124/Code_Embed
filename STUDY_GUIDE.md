@@ -1,5 +1,9 @@
 # CodeEmbed — Comprehensive Study & Revision Guide
 
+> [!CAUTION]
+> **INVALID: computed on leaky data, superseded by R-track.**
+> All empirical metrics, RQ conclusions, and interview claims in Sections 11–13 were derived from code containing unstripped docstring substrings (100% label leakage). The mathematical formulations, tensor shapes, and engineering bug fixes (SDPA tiling, CSR sparse BLAS, pre-tokenization) remain structurally accurate, but all scientific numbers and conclusions are superseded by the clean R-track.
+
 > **Purpose**: A step-by-step companion guide explaining the *what*, *why*, and *how* behind every script, architectural decision, formula, and bug fix in this project. Use this for revision, deep understanding, and interview/portfolio preparation.
 
 ---

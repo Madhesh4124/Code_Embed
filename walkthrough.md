@@ -1,5 +1,9 @@
 # CodeEmbed — Project Walkthrough & Implementation Log
 
+> [!CAUTION]
+> **INVALID: computed on leaky data, superseded by R-track.**
+> All retrieval metrics, RQ conclusions, and benchmark comparisons recorded below in Phases 1–6 were computed on unstripped CodeSearchNet code containing verbatim docstring substrings (100% query leakage). The engineering modules (SDPA memory tiling, CSR mining, pretokenization cache, PyTorch models) remain valid, but all scientific numbers and answers are superseded by the leak-free R-track.
+
 > **Purpose**: A comprehensive project log tracking the technical implementation, architectural decisions, benchmark results, and verification across each completed milestone.
 
 ---

@@ -1,5 +1,9 @@
 # CodeEmbed — Project Memory
 
+> [!CAUTION]
+> **INVALID: computed on leaky data, superseded by R-track.**
+> Phases 1–6 were computed on unstripped CodeSearchNet data with 100% docstring-in-code label leakage. All historical benchmarks and conclusions below are marked invalid and superseded by the leak-free R-track (Phases R0–R4).
+
 > **Purpose**: Track what's built, what's working, what's implemented. Update after each milestone.
 
 ---
