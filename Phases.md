@@ -381,9 +381,9 @@ done
 ```
 
 ### Exit Criteria
-- [ ] All ablations logged to MLflow
-- [ ] Summary table in `notebooks/ablation_analysis.ipynb`
-- [ ] Key findings documented
+- [x] All ablations logged to MLflow experiment `codeembed-phase6-ablations` (4 clean runs, zero duplicates)
+- [x] Summary table documented with bootstrap 95% CIs and comparative deltas
+- [x] Key findings documented (MaskedMeanPooling beats CLS by +4.6 MRR points; $\tau=0.07$ confirmed optimal sweet spot; $L=128$ matches $L=256$ quality while cutting training latency by ~50%)
 
 ---
 

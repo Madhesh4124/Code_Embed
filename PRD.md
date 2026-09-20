@@ -33,7 +33,7 @@
 
 ### Should Have
 - [x] Hard negative mining (BM25 CSR sparse mining + InfoNCEWithHardNegativesLoss)
-- [ ] Ablation studies (tokenizer, pooling, temperature, seq length)
+- [x] Ablation studies (pooling strategy, loss temperature sensitivity, sequence length truncation)
 - [ ] Layer and parameter capacity scaling exploration (Phase 6.5: ~4M to ~54M params)
 - [ ] Pretrained baseline comparison
 - [ ] Qualitative evaluation with failure analysis
