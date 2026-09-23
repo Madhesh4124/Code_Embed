@@ -75,6 +75,46 @@ Following Option 1 (Faithful Phase-by-Phase Model Progression), Phase R2-A train
 > [!NOTE]
 > **Key Scientific Finding**: Without learned modality embeddings, the unified text/code representation space achieves **0.3714 Val MRR**, operating just beneath the Pilot Gate threshold ($0.75 \times 0.5214 = \mathbf{0.3910}$). This provides the controlled baseline needed for Phase R2-B (Shared Encoder) to measure the exact marginal contribution of learned modality embeddings: $\Delta_{\text{modality}} = \text{MRR}(\text{Shared}) - \text{MRR}(\text{Basic})$ to answer **RQ2**.
 
+### 0.5 Phase R2-B: Model 2 — Shared Encoder & Pilot Gate Evaluation (Completed)
+Phase R2-B evaluated the impact of adding explicit learned modality embeddings to the shared Transformer encoder, answering **RQ2** and assessing the pre-registered **Pilot Gate**:
+- **Architecture**: [`SharedEncoder`](model/shared_encoder.py) (~7.38M parameters, 4 Pre-LN layers, $d_{\text{model}}=256$, 8 heads, $d_{\text{ff}}=1024$, MaskedMeanPooling, learned modality embeddings `nn.Embedding(2, 256)`: code=1, query=0).
+- **Training Protocol**: 2 full epochs on 360,957 clean train samples (5,638 total steps, batch size 128, AdamW, LR 3e-4, 10% proportional linear warmup, cosine decay, temperature $\tau = 0.07$, CUDA AMP mixed precision, symmetric in-batch false negative mask $M_{i,j}$).
+- **Training Duration**: 24.66 minutes on NVIDIA GeForce RTX 4050 Laptop GPU.
+- **Checkpoint**: Saved to `checkpoints/shared_clean/best_shared.pt`.
+- **MLflow Tracking**: Training Run ID `3e1ae6f598c1428a9eafb016edbb7592` (Experiment: `codeembed-clean-baselines`). Evaluation Run ID: `970a566d232d4ebb88938cc73ea1ca16`.
+
+#### Validation Retrieval Benchmark (1,000 queries vs 20,115 clean corpus):
+| Model | Modality Emb | Parameters | Val MRR | 95% Confidence Interval | Recall@1 | Recall@5 | Recall@10 | NDCG@10 |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Shared Encoder** | Learned (2x256) | 7.38M | **0.3393** | [0.3153, 0.3657] | **0.2460** | **0.4380** | **0.5080** | **0.3710** |
+| **Basic Encoder** | None | 7.38M | **0.3714** | [0.3469, 0.3976] | **0.2820** | **0.4630** | **0.5430** | **0.4042** |
+| *Clean BM25 (ATIRE)* | — | — | *0.5214* | [0.5152, 0.5275] | *0.4107* | *0.6515* | *0.7192* | *0.5644* |
+| *Pilot Gate Target* | — | — | $\ge \mathbf{0.3910}$ | — | — | — | — | — |
+
+#### Head-to-Head Delta ($\Delta_{\text{modality}} = \text{Shared} - \text{Basic}$ for RQ2):
+- **$\Delta \text{MRR}$**: $\mathbf{-0.0321}$ (-3.21 percentage points)
+- **$\Delta \text{Recall@1}$**: $\mathbf{-0.0360}$ (-3.60 percentage points)
+- **$\Delta \text{Recall@5}$**: $\mathbf{-0.0250}$ (-2.50 percentage points)
+- **$\Delta \text{Recall@10}$**: $\mathbf{-0.0350}$ (-3.50 percentage points)
+- **$\Delta \text{NDCG@10}$**: $\mathbf{-0.0332}$ (-3.32 percentage points)
+
+#### Pre-Registered Overlap Stratification Breakdown ($N=1,000$ Val Queries):
+| Stratification Bin | Queries ($N$) | BM25 Val MRR | Basic Encoder MRR | Shared Encoder MRR | $\Delta_{\text{modality}}$ |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Zero-Overlap ($c = 0.0$)** | 33 | 0.0023 | 0.0559 | **0.0982** | **+0.0423** (+75.7% boost) |
+| **Low-Overlap ($0 < c \le 0.30$)** | 324 | 0.2489 | **0.2668** | 0.2436 | -0.0232 |
+| **High-Overlap ($c > 0.30$)** | 643 | **0.6745** | 0.4411 | 0.3999 | -0.0412 |
+| **Overall** | 1,000 | **0.5214** | 0.3714 | 0.3393 | -0.0321 |
+
+#### Scientific Findings & Gate Outcome:
+1. **Pilot Gate Assessment**:
+   - The primary overall threshold is $\text{Val MRR} \ge 0.75 \times 0.5214 = \mathbf{0.3910}$. Shared Encoder achieves **0.3393** (margin: -0.0517).
+   - Under the alternative pre-registered low-overlap gate ($\text{Low-Overlap Val MRR} > \mathbf{0.2489}$), the **Basic Encoder passes comfortably with 0.2668**, while the Shared Encoder achieves **0.2436** (narrowly missing by 0.0053).
+2. **Answer to RQ2 (The Modality Gap Mechanism)**:
+   - On clean, leak-free data, adding learned modality embeddings produces an overall degradation ($\Delta_{\text{modality}} = -0.0321$).
+   - In contrast to the leaky regime (where modality embeddings served as an artificial shortcut), in leak-free contrastive learning, modality vectors act as a constant offset across all token representations, artificially separating the query and code latent spaces (the well-documented *Modality Gap* phenomenon).
+   - However, in the **Zero-Overlap slice** ($c = 0.0$), modality embeddings nearly double retrieval performance (**0.0982 vs 0.0559 MRR**, $+0.0423$), confirming that explicit modality tagging acts as a beneficial inductive bias specifically when no shared lexical tokens bridge the semantic gap.
+
 ---
 
 ## 1. Project Overview

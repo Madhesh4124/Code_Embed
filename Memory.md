@@ -11,7 +11,7 @@
 > - Frozen Research Protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`)
 > - Protocol Errata & Deviations: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
 > - Active Branch: `r-phase`
-> - Current Milestone: **Phase R0 (Clean Data Preprocessing & Dedup)** and **Phase R1 (Clean BM25 Lexical Baseline — ATIRE)** COMPLETE. Clean Test MRR = **0.5108** (vs historical leaky 0.9498). Moving to Phase R2.
+> - Current Milestone: **Phase R2-A (Basic Encoder)** and **Phase R2-B (Shared Encoder)** COMPLETE. Clean Val MRR: Basic = **0.3714**, Shared = **0.3393** (Δ_modality = -0.0321). Next: Phase R2-C (BM25 Hard Negative Mining).
 
 ---
 
@@ -22,8 +22,8 @@
 | Phase R0: Clean Data Preprocessing | 🟢 Completed | 2026-09-20 | AST byte-sliced docstrings; MinHash LSH cross-split dedup; clean Parquet + `.pt` tokenized in `data/processed_clean_v2/` |
 | Phase R1: Clean BM25 Lexical Baseline | 🟢 Completed | 2026-09-20 | ATIRE variant: Full test (19,632 queries) MRR **0.5108** [0.5047, 0.5166]; Val MRR **0.5214** [0.5152, 0.5275]; logged to MLflow |
 | Phase R2-A: Model 1 — Basic Encoder | 🟢 Completed | 2026-09-23 | 2 epochs on clean data: Val MRR **0.3714** [0.3469, 0.3976], R@1 **0.2820**, R@10 **0.5430**; BaseEncoder (~7.38M, 0 modality); MLflow Run `8cc3cb36b0494d42be6bf7253c3ab2e1` |
-| Phase R2-B: Model 2 — Shared Encoder | ⬜ Ready to Launch | 2026-09-23 | SharedEncoder with learned modality embeddings; answers RQ2 (Δ_modality); Pilot Gate: Val MRR >= 0.3910 |
-| Phase R2-C: BM25 Hard Negative Mining | ⬜ Pending R2-B | 2026-09-23 | Vectorized BM25 mining on clean train split with 3-tier false negative filters |
+| Phase R2-B: Model 2 — Shared Encoder | 🟢 Completed | 2026-09-23 | 2 epochs clean: Val MRR **0.3393** [0.3153, 0.3657], R@1 **0.2460**, R@10 **0.5080**; Δ_modality = -0.0321; Pilot Gate: Val MRR < 0.3910 (Low-overlap: 0.2436); MLflow Run `3e1ae6f598c1428a9eafb016edbb7592` |
+| Phase R2-C: BM25 Hard Negative Mining | ⬜ Next Action | 2026-09-23 | Vectorized BM25 mining on clean train split with 3-tier false negative filters |
 | Phase R2-D: Hard Negative Shared Encoder | ⬜ Pending R2-C | 2026-09-23 | Retrain from scratch (7 in-batch + 1 hard negative) for 2 epochs to isolate Δ_mining |
 | Dual Encoder (Teammate Track) | 📋 Delegated | 2026-09-20 | Model 3 handover config `configs/dual_clean.yaml` ready for independent execution by teammate (RQ1) |
 
@@ -117,7 +117,7 @@
 | **Phase R1** | `14feca9d5b024faab9da64beac12541b` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5214 [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | 🟢 Completed (Full Val) |
 | **Phase R1 (Test)** | `fb3b5313f1bb419bb330b7fc0dee6bf5` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5108 [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | 🟢 Completed (Full Test) |
 | **Phase R2-A** | `8cc3cb36b0494d42be6bf7253c3ab2e1` | BaseEncoder | 7.38M | None | In-batch (masked) | 2 | **0.3714** [0.3469, 0.3976] | 0.2820 | 0.4630 | 0.5430 | 0.4042 | 🟢 Completed (1k Val) |
-| **Phase R2-B** | — | SharedEncoder | 7.38M | Learned (2x256) | In-batch (masked) | 2 | *Pending* | — | — | — | — | ⬜ Ready to Launch |
+| **Phase R2-B** | `3e1ae6f598c1428a9eafb016edbb7592` | SharedEncoder | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.3393** [0.3153, 0.3657] | 0.2460 | 0.4380 | 0.5080 | 0.3710 | 🟢 Completed (1k Val) |
 
 ### Historical Leaky Architecture Experiments (Superseded)
 | Phase | Run ID | Model | Params | Tokenizer | Negatives | Epochs | MRR | R@1 | R@5 | R@10 | Status |
