@@ -582,7 +582,7 @@ Given a batch of $B = 128$ normalized query vectors $\mathbf{Z}_{\text{text}} \i
 In Phase 2, our Basic Transformer Encoder was trained with a single set of weights to encode both natural language docstrings and Python code without any structural indication of which modality it was reading.
 * **The Failure Mode**:
   Natural language and Python code have radically different token distributions, syntactic rules, and semantic conventions. Without an explicit modality signal, self-attention attempted to treat docstring tokens and code tokens as occupying the exact same syntactic space.
-* **Empirical Result**: The Basic Encoder achieved an MRR of only **0.4633** (Recall@1 = 0.4100). The model suffered from representation confusion.
+* **Empirical Result**: The historical Basic Encoder achieved an MRR of **0.4633** (Recall@1 = 0.4100) on leaky data. Under the clean, leak-free R-Track ([Phase R2-A](walkthrough.md#04-phase-r2-a-model-1--basic-encoder-completed)), the genuine performance is **0.3714 Val MRR** (Recall@1 = 0.2820). In both regimes, the model suffered from representation confusion without modality distinction.
 
 ### 9.2 The Mathematical Mechanism of Learned Modality Embeddings
 In Phase 3, we solved this without duplicating the 7.38M parameter Transformer. We added a tiny lookup table $\mathbf{E}_{\text{modality}} \in \mathbb{R}^{2 \times d_{\text{model}}}$ ($2 \times 256 = 512$ parameters):
@@ -676,13 +676,27 @@ During early training runs with `data/dataset.py`, 50 steps took ~5 minutes. An 
 
 ## 11. Cross-Architecture Benchmark & Research Insights (RQ1–RQ3)
 
-### 11.1 Full Benchmark Comparison Table
+### 11.0 R-Track Clean Benchmark Suite (Protocol v1.1 Remediation: `data/processed_clean_v2/`)
 
-All neural models were trained on CodeSearchNet Python using symmetric InfoNCE contrastive loss with in-batch negatives ($\tau = 0.07$, AdamW, cosine annealing with warmup) and evaluated on 1,000 sampled test queries against the full 21,005 test code corpus with 1,000 bootstrap resamples:
+All docstrings have been removed from the code documents via coordinate AST byte slicing to eliminate 100% label leakage. Cross-split MinHash LSH deduplication ($J \ge 0.85$) purges near-duplicate contamination. Evaluation uses exact generalized harmonic expected reciprocal rank ($\mathbb{E}[\text{RR}]$) tie-breaking:
+
+| Phase | Model | Architecture / Modality | Parameters | Epochs | Corpus Size | Eval Queries | MRR | 95% Confidence Interval | Recall@1 | Recall@5 | Recall@10 | NDCG@10 |
+|:---:|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Phase R1** | **BM25 Baseline** | ATIRE Lexical Floor | 0 | 0 (Lexical) | 20,115 | Validation (20,115) | **0.5214** | [0.5152, 0.5275] | **0.4107** | **0.6515** | **0.7192** | **0.5644** |
+| **Phase R1 (Test)** | **BM25 Baseline** | ATIRE Lexical Floor | 0 | 0 (Lexical) | 19,632 | Test (19,632) | **0.5108** | [0.5047, 0.5166] | **0.4052** | **0.6340** | **0.6993** | **0.5514** |
+| **Phase R2-A** | **Basic Encoder** | Pre-LN (0 modality) | 7.38M | 2 | 20,115 | Validation (1,000) | **0.3714** | [0.3469, 0.3976] | **0.2820** | **0.4630** | **0.5430** | **0.4042** |
+| **Phase R2-B** | **Shared Encoder** | Pre-LN + Modality | 7.38M | 2 | 20,115 | Validation (1,000) | *Pending* | Pilot Gate Target: $\ge \mathbf{0.3910}$ | — | — | — | — |
+
+> [!NOTE]
+> **Scientific Finding on Clean Basic Encoder**: Without learned modality embeddings, the unified text/code representation space achieves **0.3714 Val MRR**, operating just beneath the Pilot Gate threshold ($0.75 \times 0.5214 = \mathbf{0.3910}$). This provides the controlled baseline needed for Phase R2-B to isolate $\Delta_{\text{modality}} = \text{MRR}(\text{Shared}) - \text{MRR}(\text{Basic})$ for **RQ2**.
+
+### 11.1 Historical Leaky Benchmark Comparison Table (Invalidated — Superseded by R-Track)
+
+All historical neural models below were trained on unstripped CodeSearchNet Python where 100% of docstrings were duplicated verbatim inside the code body:
 
 | Phase | Model | Architecture | Parameters | Epochs | Test MRR | Test Recall@1 | Test Recall@5 | Test Recall@10 | Test NDCG@10 |
 |:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Phase 1** | **BM25 Baseline** | Lexical Okapi (sub-tokens) | 0 | 0 (Lexical) | **0.9498** | **0.9180** | **0.9890** | **0.9950** | **0.9610** |
+| **Phase 1** | **BM25 Baseline** | Lexical Okapi (sub-tokens) | 0 | 0 (Lexical) | *0.9498* | *0.9180* | *0.9890* | *0.9950* | *0.9610* |
 | **Phase 2** | **Basic Encoder** | 4-layer Shared (no modality) | 7.38M | <1 (Smoke) | **0.4633** | **0.4100** | **0.5400** | **0.5500** | **0.4806** |
 | **Phase 3** | **Shared Encoder** | 4-layer Shared + Modality Table | 7.38M | 1 | **0.9296** | **0.8880** | **0.9780** | **0.9840** | **0.9429** |
 | **Phase 4** | **Dual Encoder** | Decoupled (3-layer code + 3-layer text) | 13.19M | 2 | **0.8670** | **0.8050** | **0.9450** | **0.9620** | **0.8893** |

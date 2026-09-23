@@ -277,13 +277,24 @@ Trained for 2 epochs on NVIDIA RTX 4050 (CUDA AMP fp16). Evaluated on 1,000 samp
 
 ## 7. Summary Benchmark Comparison
 
+### 7.1 R-Track Benchmark Progression (Clean & Leak-Free Data: `data/processed_clean_v2/`)
+
+| Phase | Model | Architecture / Modality | Epochs | Corpus Size | Eval Split / Queries | MRR | 95% Confidence Interval | Recall@1 | Recall@5 | Recall@10 | NDCG@10 | Artifact Location |
+|:---:|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Phase R1** | **BM25 Baseline** | ATIRE Lexical Floor | 0 (Lexical) | 20,115 | Validation (20,115) | **0.5214** | [0.5152, 0.5275] | **0.4107** | **0.6515** | **0.7192** | **0.5644** | MLflow `14feca9d5b024faab9da64beac12541b` |
+| **Phase R1 (Test)** | **BM25 Baseline** | ATIRE Lexical Floor | 0 (Lexical) | 19,632 | Test (19,632) | **0.5108** | [0.5047, 0.5166] | **0.4052** | **0.6340** | **0.6993** | **0.5514** | MLflow `fb3b5313f1bb419bb330b7fc0dee6bf5` |
+| **Phase R2-A** | **Basic Encoder** | Pre-LN (7.38M, 0 mod) | 2 | 20,115 | Validation (1,000) | **0.3714** | [0.3469, 0.3976] | **0.2820** | **0.4630** | **0.5430** | **0.4042** | [`checkpoints/basic_clean/best_basic.pt`](checkpoints/basic_clean/best_basic.pt) |
+| **Phase R2-B** | **Shared Encoder** | Pre-LN + Modality (7.38M) | 2 | 20,115 | Validation (1,000) | *Pending* | Pilot Gate Target: $\ge \mathbf{0.3910}$ | — | — | — | — | *Ready to Launch* |
+
+### 7.2 Historical Leaky Benchmark Comparison (Invalidated — Superseded by R-Track)
+
 | Phase | Model | Architecture / Modality | Epochs | Corpus Size | Eval Queries | MRR | R@1 | R@5 | R@10 | NDCG@10 | Artifact Location |
 |:---:|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
-| **Phase 1** | **BM25 Baseline** | Lexical Subwords | 0 (Lexical) | 21,005 | 1,000 (test) | **0.9498** | **0.9180** | **0.9890** | **0.9950** | **0.9610** | MLflow `234f518410034b628b9c90eb7cbbc1cf` |
-| **Phase 2** | **Basic Encoder** | Neural Shared (7.38M, no mod) | <1 (Smoke) | 21,585 | 100 (val) | **0.4633** | **0.4100** | **0.5400** | **0.5500** | **0.4806** | `checkpoints/basic/best_basic.pt` |
-| **Phase 3** | **Shared Encoder** | Neural Shared + Modality (7.38M) | 1 | 21,005 | 1,000 (test) | **0.9296** | **0.8880** | **0.9780** | **0.9840** | **0.9429** | [`checkpoints/shared/best_shared.pt`](checkpoints/shared/best_shared.pt) |
-| **Phase 4** | **Dual Encoder** | Neural Decoupled (13.19M) | 2 | 21,005 | 1,000 (test) | **0.8670** | **0.8050** | **0.9450** | **0.9620** | **0.8893** | [`checkpoints/dual/best_dual.pt`](checkpoints/dual/best_dual.pt) |
-| **Phase 5** | **Shared + Hard Negatives** | Neural Shared + BM25 Hard (7.38M) | 2 (1+1) | 21,005 | 1,000 (test) | **0.9383** | **0.9030** | **0.9780** | **0.9880** | **0.9503** | [`checkpoints/shared_hard/best_shared.pt`](checkpoints/shared_hard/best_shared.pt) |
+| **Phase 1** | **BM25 Baseline** | Lexical Subwords | 0 (Lexical) | 21,005 | 1,000 (test) | *0.9498* | *0.9180* | *0.9890* | *0.9950* | *0.9610* | MLflow `234f518410034b628b9c90eb7cbbc1cf` (Invalid) |
+| **Phase 2** | **Basic Encoder** | Neural Shared (7.38M, no mod) | <1 (Smoke) | 21,585 | 100 (val) | *0.4633* | *0.4100* | *0.5400* | *0.5500* | *0.4806* | `checkpoints/basic/best_basic.pt` (Invalid) |
+| **Phase 3** | **Shared Encoder** | Neural Shared + Modality (7.38M) | 1 | 21,005 | 1,000 (test) | *0.9296* | *0.8880* | *0.9780* | *0.9840* | *0.9429* | [`checkpoints/shared/best_shared.pt`](checkpoints/shared/best_shared.pt) (Invalid) |
+| **Phase 4** | **Dual Encoder** | Neural Decoupled (13.19M) | 2 | 21,005 | 1,000 (test) | *0.8670* | *0.8050* | *0.9450* | *0.9620* | *0.8893* | [`checkpoints/dual/best_dual.pt`](checkpoints/dual/best_dual.pt) (Invalid) |
+| **Phase 5** | **Shared + Hard Negatives** | Neural Shared + BM25 Hard (7.38M) | 2 (1+1) | 21,005 | 1,000 (test) | *0.9383* | *0.9030* | *0.9780* | *0.9880* | *0.9503* | [`checkpoints/shared_hard/best_shared.pt`](checkpoints/shared_hard/best_shared.pt) (Invalid) |
 
 ---
 
