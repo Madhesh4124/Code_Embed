@@ -21,10 +21,10 @@
 |-----------|--------|--------------|-------|
 | Phase R0: Clean Data Preprocessing | 🟢 Completed | 2026-09-20 | AST byte-sliced docstrings; MinHash LSH cross-split dedup; clean Parquet + `.pt` tokenized in `data/processed_clean_v2/` |
 | Phase R1: Clean BM25 Lexical Baseline | 🟢 Completed | 2026-09-20 | ATIRE variant: Full test (19,632 queries) MRR **0.5108** [0.5047, 0.5166]; Val MRR **0.5214** [0.5152, 0.5275]; logged to MLflow |
-| Phase R2-A: Model 1 — Basic Encoder | ⬜ Ready to Launch | 2026-09-20 | 2-epoch training of BaseEncoder (~7.38M params, zero modality embeddings) on clean data |
-| Phase R2-B: Model 2 — Shared Encoder | ⬜ Pending R2-A | 2026-09-20 | SharedEncoder with learned modality embeddings; answers RQ2 (Δ_modality); Pilot Gate: Val MRR >= 0.3910 |
-| Phase R2-C: BM25 Hard Negative Mining | ⬜ Pending R2-B | 2026-09-20 | Vectorized BM25 mining on clean train split with 3-tier false negative filters |
-| Phase R2-D: Hard Negative Shared Encoder | ⬜ Pending R2-C | 2026-09-20 | Retrain from scratch (7 in-batch + 1 hard negative) for 2 epochs to isolate Δ_mining |
+| Phase R2-A: Model 1 — Basic Encoder | 🟢 Completed | 2026-09-23 | 2 epochs on clean data: Val MRR **0.3714** [0.3469, 0.3976], R@1 **0.2820**, R@10 **0.5430**; BaseEncoder (~7.38M, 0 modality); MLflow Run `8cc3cb36b0494d42be6bf7253c3ab2e1` |
+| Phase R2-B: Model 2 — Shared Encoder | ⬜ Ready to Launch | 2026-09-23 | SharedEncoder with learned modality embeddings; answers RQ2 (Δ_modality); Pilot Gate: Val MRR >= 0.3910 |
+| Phase R2-C: BM25 Hard Negative Mining | ⬜ Pending R2-B | 2026-09-23 | Vectorized BM25 mining on clean train split with 3-tier false negative filters |
+| Phase R2-D: Hard Negative Shared Encoder | ⬜ Pending R2-C | 2026-09-23 | Retrain from scratch (7 in-batch + 1 hard negative) for 2 epochs to isolate Δ_mining |
 | Dual Encoder (Teammate Track) | 📋 Delegated | 2026-09-20 | Model 3 handover config `configs/dual_clean.yaml` ready for independent execution by teammate (RQ1) |
 
 ---
@@ -111,7 +111,15 @@
 |:---:|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---|
 | **Phase 1** | `234f518410034b628b9c90eb7cbbc1cf` | BM25 | k1=1.5, b=0.75 | 0 (Lexical) | 0.9498 | 0.9180 | 0.9890 | 0.9950 | 0.9610 | Lexical benchmark on 1k test queries vs 21,005 corpus (logged to mlruns) |
 
-### Architecture Experiments
+### R-Track Experiments (Clean & Leak-Free Data: `data/processed_clean_v2/`)
+| Phase | Run ID | Model | Params | Modality Emb | Negatives | Epochs | Val MRR [95% CI] | Val R@1 | Val R@5 | Val R@10 | Val NDCG@10 | Status |
+|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Phase R1** | `14feca9d5b024faab9da64beac12541b` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5214 [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | 🟢 Completed (Full Val) |
+| **Phase R1 (Test)** | `fb3b5313f1bb419bb330b7fc0dee6bf5` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5108 [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | 🟢 Completed (Full Test) |
+| **Phase R2-A** | `8cc3cb36b0494d42be6bf7253c3ab2e1` | BaseEncoder | 7.38M | None | In-batch (masked) | 2 | **0.3714** [0.3469, 0.3976] | 0.2820 | 0.4630 | 0.5430 | 0.4042 | 🟢 Completed (1k Val) |
+| **Phase R2-B** | — | SharedEncoder | 7.38M | Learned (2x256) | In-batch (masked) | 2 | *Pending* | — | — | — | — | ⬜ Ready to Launch |
+
+### Historical Leaky Architecture Experiments (Superseded)
 | Phase | Run ID | Model | Params | Tokenizer | Negatives | Epochs | MRR | R@1 | R@5 | R@10 | Status |
 |:---:|:---|:---|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---|
 | **Phase 2** | — | Basic | 7.38M | Custom BPE | In-batch | <1 (Smoke) | 0.4633 | 0.3540 | 0.5890 | 0.6790 | Baseline |

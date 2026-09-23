@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/basic.yaml",
+        default="configs/basic_clean.yaml",
         help="Path to YAML configuration file.",
     )
     parser.add_argument(
@@ -83,10 +83,12 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
 
     batch_size = int(cfg.data.batch_size)
     num_workers = int(cfg.data.get("num_workers", 0))
+    train_path = cfg.data.get("train_path", "train")
+    val_path = cfg.data.get("val_path", "validation")
 
     console.print(f"[cyan]Building DataLoaders (batch_size={batch_size})...[/cyan]")
     train_loader = create_dataloader(
-        split="train",
+        split=train_path,
         tokenizer=tokenizer,
         batch_size=batch_size,
         shuffle=True,
@@ -95,7 +97,7 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
     )
 
     val_loader = create_dataloader(
-        split="validation",
+        split=val_path,
         tokenizer=tokenizer,
         batch_size=batch_size,
         shuffle=False,
@@ -123,12 +125,16 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
     )
 
     # 4. Setup MLflow
-    tracking_uri = cfg.mlflow.get("tracking_uri", "mlruns")
+    tracking_uri = cfg.mlflow.get("tracking_uri", "sqlite:///mlflow.db")
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(cfg.mlflow.experiment_name)
 
     with mlflow.start_run(run_name=cfg.mlflow.run_name) as run:
         console.print(f"[cyan]MLflow Run ID:[/cyan] {run.info.run_id}")
+        mlflow.set_tag("data_version", "clean_v2")
+        mlflow.set_tag("phase", "phase_r2a_basic")
+        mlflow.set_tag("architecture", "basic")
+        mlflow.set_tag("modality_embeddings", "none")
 
         # Log hyperparameters
         mlflow.log_params(
@@ -144,8 +150,8 @@ def run_training(config_path: str, max_steps_override: int | None = None) -> Non
                 "lr": cfg.training.lr,
                 "weight_decay": cfg.training.weight_decay,
                 "temperature": cfg.training.temperature,
-                "max_steps": cfg.training.max_steps,
-                "warmup_steps": cfg.training.warmup_steps,
+                "epochs": cfg.training.get("epochs", 2),
+                "warmup_ratio": cfg.training.get("warmup_ratio", 0.10),
                 "seed": seed,
             }
         )

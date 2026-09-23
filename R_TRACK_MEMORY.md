@@ -69,8 +69,9 @@ Refer to [`PROTOCOL.md`](PROTOCOL.md) and [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA
 | [`data/processed_clean_v2/`](data/processed_clean_v2/) | Cleaned Parquet & `.pt` tokenized splits + hashes | 🟢 Generated & Verified |
 | [`tests/test_data_integrity.py`](tests/test_data_integrity.py) | Coordinate slicing, AST equivalence, harmonic E[RR] tests | 🟢 13/13 Passed |
 | [`data/pretokenize.py`](data/pretokenize.py) | Fast batch pre-tokenization into `.pt` binary tensor files | 🟢 Complete (Train/Val/Test) |
-| [`retrieval/bm25.py`](retrieval/bm25.py) | Lexical retriever with generalized harmonic $\mathbb{E}[\text{RR}]$ | 🟢 Complete (Phase R1) |
 | [`scripts/run_baseline.py`](scripts/run_baseline.py) | BM25 benchmark script with MLflow tagging | 🟢 Complete |
+| [`configs/basic_clean.yaml`](configs/basic_clean.yaml) | Basic Encoder config for clean data | 🟢 Created |
+| [`checkpoints/basic_clean/best_basic.pt`](checkpoints/basic_clean/best_basic.pt) | Phase R2-A Basic Encoder checkpoint (~7.38M) | 🟢 Trained & Verified |
 
 ---
 
@@ -141,6 +142,21 @@ All requested validation gates have been empirically verified:
      - *Diagnosis*: Root cause identified as Robertson's $\ln(1 + \text{fraction})$ non-negative smoothing vs ATIRE's piecewise $\epsilon \cdot \overline{\text{IDF}}$ negative-frequency floor.
    - **Direct Numerical Parity (`method='rank_bm25'`)**:
      - Evaluated on 1,000 queries: Mean Pearson score correlation = **1.000000**, Mean absolute score diff = **$3.19 \times 10^{-5}$**, Max score diff = **$0.002868 < 0.005$** (PASS), MRR difference = **0.0000** (PASS).
+
+### 5.4 Phase R2-A: Model 1 — Basic Encoder (Complete)
+- **Model**: BaseEncoder (~7.38M parameters, 4L-256d-8h-1024ff, Pre-LN, MaskedMeanPooling, zero modality embeddings).
+- **Training**: 2 epochs on 360,957 clean train samples (5,638 steps, batch size 128, AdamW, LR 3e-4, 10% linear warmup, cosine decay, temperature $\tau = 0.07$, symmetric in-batch false negative mask $M_{i,j}$).
+- **Hardware & Latency**: 24.85 minutes total on NVIDIA RTX 4050 Laptop GPU (CUDA AMP).
+- **Validation Evaluation (1,000 sampled queries against full 20,115 clean validation corpus)**:
+  - **MRR**: **0.3714** (95% CI: [0.3469, 0.3976])
+  - **Recall@1**: **0.2820** (95% CI: [0.2550, 0.3100])
+  - **Recall@5**: **0.4630** (95% CI: [0.4300, 0.4950])
+  - **Recall@10**: **0.5430** (95% CI: [0.5100, 0.5730])
+  - **NDCG@10**: **0.4042** (95% CI: [0.3780, 0.4310])
+  - **MLflow Run ID**: `8cc3cb36b0494d42be6bf7253c3ab2e1` (Experiment: `codeembed-clean-baselines`)
+- **Key Scientific Finding**:
+  - The minimal neural anchor (without learned modality embeddings) achieves **0.3714 Val MRR**, operating just beneath the Pilot Gate threshold ($0.75 \times 0.5214 = \mathbf{0.3910}$).
+  - This establishes the empirical baseline for Phase R2-B (Shared Encoder) to measure $\Delta_{\text{modality}} = \text{MRR}(\text{Shared}) - \text{MRR}(\text{Basic})$ to answer **RQ2**.
 
 ---
 
@@ -223,8 +239,8 @@ We adopt the phase-by-phase model hierarchy from the original [`Phases.md`](Phas
 - **Commit Strategy**: Modular commits per remediation phase:
   - Phase R0: Clean Data Preprocessing, AST coordinate slicing, MinHash LSH deduplication, and data integrity tests.
   - Phase R1: Clean Lexical Baseline calibration (ATIRE variant), exact test NN Jaccard audit, and protocol errata.
-- **Current Status**: All Phase R0 & R1 validation checks complete. Option 1 documented as canonical roadmap.
-- **Next Action**: Ready to launch Phase R2-A (Model 1: Basic Encoder without modality embeddings, 2 epochs on clean data) upon user go-ahead.
+- **Current Status**: Phase R2-A (Model 1: Basic Encoder) complete (Validation MRR = 0.3714 [0.3469, 0.3976]).
+- **Next Action**: Launch Phase R2-B (Model 2: Shared Encoder with learned modality embeddings, 2 epochs on clean data) to test Pilot Gate (Val MRR >= 0.3910) and isolate Δ_modality for RQ2.
 
 
 

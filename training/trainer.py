@@ -145,6 +145,12 @@ class ContrastiveTrainer:
         self.total_training_steps = min(
             self.max_steps, self.max_epochs * steps_per_epoch
         )
+        if "warmup_ratio" in t_cfg:
+            self.warmup_steps = max(
+                1, int(float(t_cfg["warmup_ratio"]) * self.total_training_steps)
+            )
+        else:
+            self.warmup_steps = int(t_cfg.get("warmup_steps", 1000))
         self.scheduler = get_cosine_schedule_with_warmup(
             self.optimizer,
             num_warmup_steps=self.warmup_steps,
@@ -220,6 +226,11 @@ class ContrastiveTrainer:
 
         has_hard_negs = "hard_neg_code_ids" in batch
 
+        # Protocol v1.1 §2.3: In-batch false negative mask M_{i,j} = (query_i == query_j or code_i == code_j)
+        query_match = (text_ids.unsqueeze(1) == text_ids.unsqueeze(0)).all(dim=-1)
+        code_match = (code_ids.unsqueeze(1) == code_ids.unsqueeze(0)).all(dim=-1)
+        in_batch_mask = query_match | code_match
+
         with torch.amp.autocast(device_type=self.device.type, enabled=self.use_amp):
             code_emb, text_emb = self._encode_pair(
                 code_ids, code_mask, text_ids, text_mask
@@ -233,10 +244,12 @@ class ContrastiveTrainer:
                 hn_ids_flat = hn_ids.view(B * K, L)
                 hn_mask_flat = hn_mask.view(B * K, L)
                 hn_emb = self._encode_code_only(hn_ids_flat, hn_mask_flat)
-                loss = self.criterion(text_emb, code_emb, hn_emb)
+                loss = self.criterion(
+                    text_emb, code_emb, hn_emb, mask=in_batch_mask
+                )
             else:
                 hn_emb = None
-                loss = self.criterion(text_emb, code_emb)
+                loss = self.criterion(text_emb, code_emb, mask=in_batch_mask)
 
         # Backward pass with scaled gradients
         self.scaler.scale(loss).backward()

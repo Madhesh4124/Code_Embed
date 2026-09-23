@@ -104,7 +104,14 @@ def compute_similarity_rankings(
         1D array of shape (|queries|,) containing 1-based ranks.
     """
     n_queries = len(query_embeddings)
+    total_docs = len(corpus_embeddings)
     ranks = np.zeros(n_queries, dtype=np.float64)
+
+    # Precompute harmonic numbers H_n = sum_{k=1}^n 1/k for exact expected RR under ties (Protocol v1.1)
+    harmonic_table = np.zeros(total_docs + 1, dtype=np.float64)
+    harmonic_table[1:] = np.cumsum(
+        1.0 / np.arange(1, total_docs + 1, dtype=np.float64)
+    )
 
     for start_idx in range(0, n_queries, batch_size):
         end_idx = min(start_idx + batch_size, n_queries)
@@ -117,10 +124,21 @@ def compute_similarity_rankings(
             gt_idx = ground_truth_indices[global_q_idx]
             target_score = sim_matrix[i, gt_idx]
 
-            # 1-based rank: 1 + number of documents with higher similarity
             higher_count = int(np.sum(sim_matrix[i] > target_score))
-            tie_count = int(np.sum(sim_matrix[i] == target_score)) - 1
-            rank = higher_count + 1 + 0.5 * max(0, tie_count)
+            eq_count = int(np.sum(sim_matrix[i] == target_score))
+            if eq_count <= 0:
+                eq_count = 1
+
+            # Protocol v1.1 & Errata §1.5: Generalized Harmonic Expected Reciprocal Rank
+            if eq_count > 1:
+                expected_rr = (
+                    harmonic_table[higher_count + eq_count]
+                    - harmonic_table[higher_count]
+                ) / eq_count
+                rank = 1.0 / expected_rr if expected_rr > 0 else np.inf
+            else:
+                rank = float(higher_count + 1)
+
             ranks[global_q_idx] = rank
 
     return ranks
@@ -164,6 +182,8 @@ def evaluate_checkpoint(
     seed: int = 42,
     batch_size: int = 128,
     experiment_name: str = "CodeEmbed-Evaluation",
+    data_dir: str | None = None,
+    tracking_uri: str | None = None,
 ) -> dict[str, float | tuple[float, float]]:
     """Evaluate a saved model checkpoint against a dataset split.
 
@@ -174,6 +194,8 @@ def evaluate_checkpoint(
         seed: Random seed for query subsampling.
         batch_size: Inference batch size.
         experiment_name: MLflow experiment name.
+        data_dir: Optional path to processed data directory (e.g. data/processed_clean_v2).
+        tracking_uri: Optional MLflow tracking URI.
 
     Returns:
         Dictionary of computed retrieval metrics and confidence intervals.
@@ -247,6 +269,7 @@ def evaluate_checkpoint(
         batch_size=batch_size,
         shuffle=False,
         max_length=int(m_cfg.get("max_seq_len", 256)),
+        data_dir=data_dir,
     )
 
     console.print(f"[cyan]Encoding {split} corpus and queries...[/cyan]")
@@ -336,7 +359,10 @@ def evaluate_checkpoint(
 
     # Log to MLflow
     os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
-    mlflow.set_tracking_uri("mlruns")
+    uri = tracking_uri or (
+        "sqlite:///mlflow.db" if Path("mlflow.db").exists() else "mlruns"
+    )
+    mlflow.set_tracking_uri(uri)
     mlflow.set_experiment(experiment_name)
     with mlflow.start_run(run_name=f"eval-{Path(checkpoint_path).stem}-{split}"):
         mlflow.log_params(
@@ -346,6 +372,7 @@ def evaluate_checkpoint(
                 "corpus_size": total_docs,
                 "num_evaluated_queries": len(eval_queries),
                 "sample_size": str(sample_size),
+                "data_dir": str(data_dir) if data_dir else "default",
             }
         )
         for k, v in scalar_metrics.items():
@@ -389,6 +416,18 @@ if __name__ == "__main__":
         help="Batch size for embedding generation.",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=None,
+        help="Data directory containing splits (default: data/processed_clean_v2).",
+    )
+    parser.add_argument(
+        "--tracking-uri",
+        type=str,
+        default=None,
+        help="MLflow tracking URI (default: sqlite:///mlflow.db).",
+    )
     args = parser.parse_args()
 
     evaluate_checkpoint(
@@ -397,4 +436,6 @@ if __name__ == "__main__":
         sample_size=args.sample_size,
         batch_size=args.batch_size,
         seed=args.seed,
+        data_dir=args.data_dir,
+        tracking_uri=args.tracking_uri,
     )

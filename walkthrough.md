@@ -57,6 +57,24 @@ Full-corpus BM25 evaluation under Protocol v1.1 with conservative ATIRE negative
 > [!NOTE]
 > **Key Scientific Takeaway**: On clean data with docstring leakage eliminated, BM25 performance drops from the artifactual **0.9498 MRR** to a genuine **0.5108 MRR** (R@1 = 40.52%). This confirms the user critique and establishes the genuine, conservative lexical baseline for neural retrieval models.
 
+### 0.4 Phase R2-A: Model 1 — Basic Encoder (Completed)
+Following Option 1 (Faithful Phase-by-Phase Model Progression), Phase R2-A trained the minimal neural anchor from scratch on leak-free clean data:
+- **Architecture**: [`BaseEncoder`](model/encoder.py) (~7.38M parameters, 4 Pre-LN layers, $d_{\text{model}}=256$, 8 heads, $d_{\text{ff}}=1024$, MaskedMeanPooling, zero modality embeddings).
+- **Training Protocol**: 2 full epochs on 360,957 clean train samples (5,638 total steps, batch size 128, AdamW, LR 3e-4, 10% proportional linear warmup, cosine decay, temperature $\tau = 0.07$, CUDA AMP mixed precision, symmetric in-batch false negative mask $M_{i,j}$).
+- **Training Duration**: 24.85 minutes on NVIDIA GeForce RTX 4050 Laptop GPU.
+- **Checkpoint**: Saved to `checkpoints/basic_clean/best_basic.pt`.
+- **MLflow Tracking**: Logged to `sqlite:///mlflow.db` under experiment `codeembed-clean-baselines` (Run ID: `8cc3cb36b0494d42be6bf7253c3ab2e1`).
+
+#### Validation Retrieval Benchmark (1,000 queries vs 20,115 clean corpus):
+| Model | Modality Emb | Parameters | Val MRR | 95% Confidence Interval | Recall@1 | Recall@5 | Recall@10 | NDCG@10 |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Basic Encoder** | None | 7.38M | **0.3714** | [0.3469, 0.3976] | 0.2820 | 0.4630 | 0.5430 | 0.4042 |
+| *Clean BM25 (ATIRE)* | — | — | *0.5214* | [0.5152, 0.5275] | *0.4107* | *0.6515* | *0.7192* | *0.5644* |
+| *Pilot Gate Target* | — | — | $\ge \mathbf{0.3910}$ | — | — | — | — | — |
+
+> [!NOTE]
+> **Key Scientific Finding**: Without learned modality embeddings, the unified text/code representation space achieves **0.3714 Val MRR**, operating just beneath the Pilot Gate threshold ($0.75 \times 0.5214 = \mathbf{0.3910}$). This provides the controlled baseline needed for Phase R2-B (Shared Encoder) to measure the exact marginal contribution of learned modality embeddings: $\Delta_{\text{modality}} = \text{MRR}(\text{Shared}) - \text{MRR}(\text{Basic})$ to answer **RQ2**.
+
 ---
 
 ## 1. Project Overview
