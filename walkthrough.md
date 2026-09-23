@@ -98,22 +98,32 @@ Phase R2-B evaluated the impact of adding explicit learned modality embeddings t
 - **$\Delta \text{Recall@10}$**: $\mathbf{-0.0350}$ (-3.50 percentage points)
 - **$\Delta \text{NDCG@10}$**: $\mathbf{-0.0332}$ (-3.32 percentage points)
 
-#### Pre-Registered Overlap Stratification Breakdown ($N=1,000$ Val Queries):
-| Stratification Bin | Queries ($N$) | BM25 Val MRR | Basic Encoder MRR | Shared Encoder MRR | $\Delta_{\text{modality}}$ |
-|---|:---:|:---:|:---:|:---:|:---:|
-| **Zero-Overlap ($c = 0.0$)** | 33 | 0.0023 | 0.0559 | **0.0982** | **+0.0423** (+75.7% boost) |
-| **Low-Overlap ($0 < c \le 0.30$)** | 324 | 0.2489 | **0.2668** | 0.2436 | -0.0232 |
-| **High-Overlap ($c > 0.30$)** | 643 | **0.6745** | 0.4411 | 0.3999 | -0.0412 |
-| **Overall** | 1,000 | **0.5214** | 0.3714 | 0.3393 | -0.0321 |
+#### Full Validation Split Retrieval Benchmark (All 20,115 queries vs 20,115 corpus):
+- **MRR**: **0.3423** (95% CI: [0.3366, 0.3480])
+- **Recall@1**: **0.2500** (5,028 / 20,115)
+- **Recall@5**: **0.4425** (8,901 / 20,115)
+- **Recall@10**: **0.5194** (10,447 / 20,115)
+- **NDCG@10**: **0.3768**
 
-#### Scientific Findings & Gate Outcome:
-1. **Pilot Gate Assessment**:
-   - The primary overall threshold is $\text{Val MRR} \ge 0.75 \times 0.5214 = \mathbf{0.3910}$. Shared Encoder achieves **0.3393** (margin: -0.0517).
-   - Under the alternative pre-registered low-overlap gate ($\text{Low-Overlap Val MRR} > \mathbf{0.2489}$), the **Basic Encoder passes comfortably with 0.2668**, while the Shared Encoder achieves **0.2436** (narrowly missing by 0.0053).
-2. **Answer to RQ2 (The Modality Gap Mechanism)**:
-   - On clean, leak-free data, adding learned modality embeddings produces an overall degradation ($\Delta_{\text{modality}} = -0.0321$).
-   - In contrast to the leaky regime (where modality embeddings served as an artificial shortcut), in leak-free contrastive learning, modality vectors act as a constant offset across all token representations, artificially separating the query and code latent spaces (the well-documented *Modality Gap* phenomenon).
-   - However, in the **Zero-Overlap slice** ($c = 0.0$), modality embeddings nearly double retrieval performance (**0.0982 vs 0.0559 MRR**, $+0.0423$), confirming that explicit modality tagging acts as a beneficial inductive bias specifically when no shared lexical tokens bridge the semantic gap.
+#### Pre-Registered Overlap Stratification Breakdown on FULL Validation Split ($N=20,115$ Queries):
+| Stratum | Queries ($N$) | % Split | BM25 Val MRR | Shared Encoder MRR | Neural R@1 | Neural R@10 |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Zero-Overlap ($c = 0.0$)** | 580 | 2.88% | 0.0023 | **0.0444** | 0.0207 | 0.0741 |
+| **Low-Overlap ($0 < c \le 0.30$)** | 6,321 | 31.42% | 0.2489 | **0.2433** | 0.1604 | 0.4083 |
+| **High-Overlap ($c > 0.30$)** | 13,214 | 65.69% | **0.6745** | **0.4026** | 0.3029 | 0.5921 |
+| **OVERALL** | 20,115 | 100.00% | **0.5214** | **0.3423** | 0.2500 | 0.5194 |
+
+#### Official Pilot Gate Assessment (Protocol v1.1 §3.3):
+1. **Primary Gate**: Validation $\text{MRR} \ge 0.75 \times 0.5214 = \mathbf{0.3910}$.
+   - Actual: **0.3423** $\implies$ **[FAIL]** (margin: -0.0487).
+2. **Alternative Low-Overlap Gate**: Low-Overlap Validation $\text{MRR} > \mathbf{0.2489}$.
+   - Actual: **0.2433** $\implies$ **[FAIL]** (margin: -0.0056).
+3. **Mandated Fallback Action**:
+   - Because both criteria failed on the official full validation benchmark, ad-hoc parameter tuning is strictly forbidden.
+   - We must trigger the pre-registered capped fallback tuning grid across 6 validation runs:
+     - 3 Learning Rates: $\{1\text{e-}4, 3\text{e-}4, 5\text{e-}4\}$
+     - 2 Temperatures: $\{0.05, 0.07\}$
+     - The single highest-MRR configuration on validation will be adopted across all comparison arms.
 
 ---
 

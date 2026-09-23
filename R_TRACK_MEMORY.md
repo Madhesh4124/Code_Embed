@@ -163,14 +163,16 @@ All requested validation gates have been empirically verified:
 - **Training**: 2 epochs on 360,957 clean train samples (5,638 total steps, batch size 128, AdamW, LR 3e-4, 10% proportional linear warmup, cosine decay, temperature $\tau = 0.07$, CUDA AMP mixed precision, symmetric in-batch false negative mask $M_{i,j}$).
 - **Hardware & Latency**: 24.66 minutes on NVIDIA GeForce RTX 4050 Laptop GPU.
 - **MLflow Tracking**: Logged to `sqlite:///mlflow.db` under experiment `codeembed-clean-baselines` (Run ID: `3e1ae6f598c1428a9eafb016edbb7592`). Evaluation Run ID: `970a566d232d4ebb88938cc73ea1ca16`.
-- **Validation Evaluation (1,000 sampled queries against full 20,115 clean validation corpus)**:
-  - **MRR**: **0.3393** (95% CI: [0.3153, 0.3657])
-  - **Recall@1**: **0.2460** (95% CI: [0.2210, 0.2730])
-  - **Recall@5**: **0.4380** (95% CI: [0.4080, 0.4670])
-  - **Recall@10**: **0.5080** (95% CI: [0.4770, 0.5381])
-  - **NDCG@10**: **0.3710** (95% CI: [0.3458, 0.3970])
+- **Official Pilot Gate Evaluation (FULL 20,115 validation queries against full 20,115 clean corpus)**:
+  - **MRR**: **0.3423** (95% CI: [0.3366, 0.3480])
+  - **Recall@1**: **0.2500** (5,028 / 20,115)
+  - **Recall@5**: **0.4425** (8,901 / 20,115)
+  - **Recall@10**: **0.5194** (10,447 / 20,115)
+  - **NDCG@10**: **0.3768**
+- **1,000 Sampled Validation Queries Benchmark**:
+  - **MRR**: **0.3393** (95% CI: [0.3153, 0.3657]), Recall@1 = 0.2460, Recall@5 = 0.4380, Recall@10 = 0.5080, NDCG@10 = 0.3710.
 
-#### Direct Comparison & Modality Embedding Impact ($\Delta_{\text{modality}}$ for RQ2):
+#### Direct Comparison & Modality Embedding Impact ($\Delta_{\text{modality}}$ for RQ2 on 1k Sample):
 | Metric | Clean Basic Encoder (No Modality) | Clean Shared Encoder (+ Modality Emb) | $\Delta_{\text{modality}}$ (RQ2 Impact) | BM25 Clean Val (ATIRE) |
 |---|:---:|:---:|:---:|:---:|
 | **MRR** | **0.3714** [0.3469, 0.3976] | **0.3393** [0.3153, 0.3657] | **-0.0321** (-3.21 pts) | **0.5214** [0.5152, 0.5275] |
@@ -179,22 +181,25 @@ All requested validation gates have been empirically verified:
 | **Recall@10** | **0.5430** [0.5100, 0.5730] | **0.5080** [0.4770, 0.5381] | **-0.0350** (-3.50 pts) | **0.7192** |
 | **NDCG@10** | **0.4042** [0.3780, 0.4310] | **0.3710** [0.3458, 0.3970] | **-0.0332** (-3.32 pts) | **0.5644** |
 
-#### Pre-Registered Overlap Stratification Breakdown ($N=1,000$ Val Queries):
-| Stratification Bin | Queries ($N$) | BM25 Val MRR | Basic Encoder MRR | Shared Encoder MRR | $\Delta_{\text{modality}}$ |
-|---|:---:|:---:|:---:|:---:|:---:|
-| **Zero-Overlap ($c = 0.0$)** | 33 | 0.0023 | 0.0559 | **0.0982** | **+0.0423** (+75.7% boost) |
-| **Low-Overlap ($0 < c \le 0.30$)** | 324 | 0.2489 | **0.2668** | 0.2436 | -0.0232 |
-| **High-Overlap ($c > 0.30$)** | 643 | **0.6745** | 0.4411 | 0.3999 | -0.0412 |
-| **Overall** | 1,000 | **0.5214** | 0.3714 | 0.3393 | -0.0321 |
+#### Pre-Registered Overlap Stratification Breakdown on FULL Validation Split ($N=20,115$ Queries):
+| Stratum | Queries ($N$) | % Split | BM25 Val MRR | Shared Encoder MRR | Neural R@1 | Neural R@10 |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Zero-Overlap ($c = 0.0$)** | 580 | 2.88% | 0.0023 | **0.0444** | 0.0207 | 0.0741 |
+| **Low-Overlap ($0 < c \le 0.30$)** | 6,321 | 31.42% | 0.2489 | **0.2433** | 0.1604 | 0.4083 |
+| **High-Overlap ($c > 0.30$)** | 13,214 | 65.69% | **0.6745** | **0.4026** | 0.3029 | 0.5921 |
+| **OVERALL** | 20,115 | 100.00% | **0.5214** | **0.3423** | 0.2500 | 0.5194 |
 
-#### Pilot Gate Assessment & Scientific Synthesis:
-1. **Pilot Gate Evaluation**:
-   - Primary Threshold: $\text{Val MRR} \ge 0.75 \times 0.5214 = \mathbf{0.3910}$. Shared Encoder achieves **0.3393** (margin: -0.0517).
-   - Alternative Low-Overlap Threshold: $\text{Low-Overlap Val MRR} > \mathbf{0.2489}$. Basic Encoder achieves **0.2668** (PASSES), while Shared Encoder achieves **0.2436** (narrowly misses by 0.0053).
-2. **Answer to RQ2**:
-   - In contrast to historical leaky data where modality embeddings appeared to provide an artificial boost, on leak-free data **adding learned modality embeddings causes a net overall drop of -0.0321 MRR** (-3.21 percentage points).
-   - *Mechanistic Root Cause (The Modality Gap)*: Learned modality vectors ($\mathbf{E}_{\text{modality}} \in \mathbb{R}^{2 \times 256}$) impose a constant directional offset across all tokens, inducing a geometric separation between query and code representations in latent space. When lexical tokens are shared across modalities (low and high overlap), this offset impedes token-to-token semantic alignment.
-   - *Nuanced Exception*: In the strictly **Zero-Overlap bin**, modality embeddings nearly double retrieval performance (**0.0982 vs 0.0559 MRR**, $+0.0423$), demonstrating that explicit modality tagging functions as a useful inductive prior only when zero lexical overlap exists between query and code.
+#### Official Pilot Gate Assessment (Protocol v1.1 §3.3):
+1. **Primary Gate**: Validation $\text{MRR} \ge 0.75 \times 0.5214 = \mathbf{0.3910}$.
+   - Actual: **0.3423** $\implies$ **[FAIL]** (margin: -0.0487).
+2. **Alternative Low-Overlap Gate**: Low-Overlap Validation $\text{MRR} > \mathbf{0.2489}$.
+   - Actual: **0.2433** $\implies$ **[FAIL]** (margin: -0.0056).
+3. **Pre-Registered Fallback Action**:
+   - Because both criteria failed, do NOT tweak hyperparameters ad hoc.
+   - Execute the pre-registered capped fallback tuning grid across all arms:
+     - 3 Learning Rates: $\{1\text{e-}4, 3\text{e-}4, 5\text{e-}4\}$
+     - 2 Temperatures: $\{0.05, 0.07\}$
+     - Total: 6 validation runs. The single highest-MRR configuration on validation is adopted across all comparison arms.
 
 ---
 

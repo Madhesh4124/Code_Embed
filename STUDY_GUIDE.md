@@ -685,7 +685,7 @@ All docstrings have been removed from the code documents via coordinate AST byte
 | **Phase R1** | **BM25 Baseline** | ATIRE Lexical Floor | 0 | 0 (Lexical) | 20,115 | Validation (20,115) | **0.5214** | [0.5152, 0.5275] | **0.4107** | **0.6515** | **0.7192** | **0.5644** |
 | **Phase R1 (Test)** | **BM25 Baseline** | ATIRE Lexical Floor | 0 | 0 (Lexical) | 19,632 | Test (19,632) | **0.5108** | [0.5047, 0.5166] | **0.4052** | **0.6340** | **0.6993** | **0.5514** |
 | **Phase R2-A** | **Basic Encoder** | Pre-LN (0 modality) | 7.38M | 2 | 20,115 | Validation (1,000) | **0.3714** | [0.3469, 0.3976] | **0.2820** | **0.4630** | **0.5430** | **0.4042** |
-| **Phase R2-B** | **Shared Encoder** | Pre-LN + Modality | 7.38M | 2 | 20,115 | Validation (1,000) | **0.3393** | [0.3153, 0.3657] | **0.2460** | **0.4380** | **0.5080** | **0.3710** |
+| **Phase R2-B** | **Shared Encoder** | Pre-LN + Modality | 7.38M | 2 | 20,115 | Validation (20,115) | **0.3423** | [0.3366, 0.3480] | **0.2500** | **0.4425** | **0.5194** | **0.3768** |
 
 > [!NOTE]
 > **Scientific Finding on Phase R2-B (Shared vs Basic — RQ2)**:
