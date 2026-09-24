@@ -212,6 +212,24 @@ All requested validation gates have been empirically verified:
    - **Gate Outcome**: **PASSES PRIMARY GATE** ($0.4033 \ge 0.3910$) and **PASSES LOW-OVERLAP GATE** ($0.2931 > 0.2489$).
    - **Locked Standard Recipe**: $(\text{LR} = 5\text{e-}4, \tau = 0.05)$ is officially frozen and adopted across all comparison arms.
 
+### 5.6 Phase R2-C: BM25 Hard Negative Mining (Complete)
+- **Dataset**: `data/processed_clean_v2/train.parquet` (360,957 clean functions).
+- **Lexical Index**: BM25 with ATIRE negative-IDF piecewise floor (`bm25_train_index.pkl`, 196,172 vocabulary terms).
+- **Mining Engine**: Multithreaded SciPy CSR Sparse Matmul ($Q @ D_t$) across CPU worker threads via `ThreadPoolExecutor` (batch size 500 queries).
+- **Execution Latency & Throughput**:
+  - BM25 Indexing + Caching: ~1 minute.
+  - Fingerprints Precomputation (AST skeletons + 64-perm MinHash signatures): 526.7s.
+  - Sparse BLAS Mining: **130.17s** for all 360,957 queries (**2,772.9 queries/second**).
+- **3-Tier Pre-Registered False Negative Filter Efficacy**:
+  1. **Tier 1 (Identical Query Docstrings)**: **12,448** false negatives purged.
+  2. **Tier 2 (Normalized AST Skeleton with $\ge 20$ nodes)**: **5,589** syntactic clone false negatives purged.
+  3. **Tier 3 (MinHash 3-gram $J \ge 0.70$)**: **557** lexical near-duplicate false negatives purged.
+  4. **Total Purged False Negatives**: **18,594** semantic duplicates successfully prevented from corrupting contrastive gradients.
+- **Output Artifact**:
+  - Path: `data/processed_clean_v2/train_hard_negatives.pt`
+  - Shape: `(360957, 7)`, Dtype: `torch.int32`.
+  - Integrity: Verified zero self-matches ($j \ne i$), zero row duplicates, all indices within $[0, 360956]$.
+
 ---
 
 ## 6. Model Progression (Option 1: Faithful Phase-by-Phase)
@@ -293,10 +311,10 @@ We adopt the phase-by-phase model hierarchy from the original [`Phases.md`](Phas
 - **Commit Strategy**: Modular commits per remediation phase:
   - Phase R0: Clean Data Preprocessing, AST coordinate slicing, MinHash LSH deduplication, and data integrity tests.
   - Phase R1: Clean Lexical Baseline calibration (ATIRE variant), exact test NN Jaccard audit, and protocol errata.
-- **Current Status**: Phase R2-A (Basic Encoder: Val MRR = 0.3714) and Phase R2-B (Shared Encoder: Pilot initial Val MRR = 0.3423, Fallback Grid Winner `lr_5e-4_tau_0.05` Val MRR = **0.4033**) complete. Pilot Gate OFFICIALLY PASSED ($0.4033 \ge 0.3910$ and Low-Overlap $0.2931 > 0.2489$). Standard recipe frozen at $(\text{LR}=5\text{e-}4, \tau=0.05)$.
+- **Current Status**: Phase R2-A (Basic Encoder), Phase R2-B (Shared Encoder, Fallback Grid Winner `lr_5e-4_tau_0.05` Val MRR = **0.4033**), and Phase R2-C (BM25 Hard Negative Mining, 360,957 clean train queries mined with 3-tier filters, 18,594 false negatives purged) complete. Pilot Gate OFFICIALLY PASSED ($0.4033 \ge 0.3910$ and Low-Overlap $0.2931 > 0.2489$). Standard recipe frozen at $(\text{LR}=5\text{e-}4, \tau=0.05)$.
 - **Next Action**: 
-  1. Conduct 3-seed replication (seeds 42, 123, 456) of winning recipe $(\text{LR}=5\text{e-}4, \tau=0.05)$ and evaluate on test once with paired bootstrap vs BM25.
-  2. Launch Phase R2-C: BM25 Hard Negative Mining on clean train data (`data/processed_clean_v2/train.parquet`) with 3-tier false negative filters, followed by Phase R2-D: Hard-Negative Shared Encoder retraining from scratch.
+  1. Launch Phase R2-D: Hard-Negative Shared Encoder retraining from scratch (7 in-batch + 1 hard negative per sample) using `configs/shared_hard_clean.yaml` to measure $\Delta_{\text{mining}} = \text{MRR}(\text{Hard}) - \text{MRR}(\text{In-Batch})$ on validation data (RQ3).
+  2. Conduct 3-seed replication (seeds 42, 123, 456) of winning recipe $(\text{LR}=5\text{e-}4, \tau=0.05)$ and evaluate on test once with paired bootstrap vs BM25.
 
 
 

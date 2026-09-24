@@ -112,6 +112,8 @@ def run_training(
 
     batch_size = int(cfg.data.batch_size)
     num_workers = int(cfg.data.get("num_workers", 0))
+    train_path = cfg.data.get("train_path", "train")
+    val_path = cfg.data.get("val_path", "validation")
     hn_file = cfg.data.get("hard_negatives_file", None)
     num_hn = int(cfg.data.get("num_hard_negatives", 1))
 
@@ -119,7 +121,7 @@ def run_training(
         f"[cyan]Building DataLoaders (batch_size={batch_size}, num_hard_negatives={num_hn})...[/cyan]"
     )
     train_loader = create_dataloader(
-        split="train",
+        split=train_path,
         tokenizer=tokenizer,
         batch_size=batch_size,
         shuffle=True,
@@ -130,7 +132,7 @@ def run_training(
     )
 
     val_loader = create_dataloader(
-        split="validation",
+        split=val_path,
         tokenizer=tokenizer,
         batch_size=batch_size,
         shuffle=False,
@@ -230,9 +232,10 @@ def run_training(
             f"[bold green]Training complete! Best Validation MRR: {results.get('best_val_mrr', 0.0):0.4f}[/bold green]"
         )
 
-    # 6. Post-training test evaluation (in its own evaluation MLflow run)
+    # 6. Post-training evaluation on validation set (enforce strict test set discipline)
+    eval_split = str(cfg.training.get("eval_split", "validation"))
     console.print(
-        "\n[bold cyan]Evaluating best model on formal test benchmark...[/bold cyan]"
+        f"\n[bold cyan]Evaluating best model on {eval_split} benchmark...[/bold cyan]"
     )
     from evaluation.evaluate import evaluate_checkpoint
 
@@ -240,7 +243,7 @@ def run_training(
     if best_ckpt.exists():
         evaluate_checkpoint(
             checkpoint_path=str(best_ckpt),
-            split="test",
+            split=eval_split,
             sample_size=1000,
             batch_size=batch_size,
             seed=seed,

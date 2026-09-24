@@ -535,3 +535,41 @@ To avoid candidate bucket bias from LSH, an exact inverted index over word 3-gra
   - **Decision**: Formally adopted the ATIRE floor (`method='rank_bm25'`) on the validation split as the stronger, conservative baseline (Protocol Errata §1.10).
 - **Exact Numerical Parity (`method='rank_bm25'`)**:
   - Evaluated on 1,000 test queries: Mean Pearson score correlation = **1.000000**, Mean absolute score difference = **$3.19 \times 10^{-5}$**, Max score difference = **$0.002868 < 0.005$** (Pass), MRR difference = **0.0000** (Pass).
+
+### 12.4 Phase R2-A & R2-B: Neural Baselines & Pilot Gate Evaluation
+
+#### 1. Phase R2-A (Basic Encoder — No Modality Embeddings)
+- **Model**: `BaseEncoder` (~7.38M params, 4L-256d-8h-1024ff, Pre-LN, MaskedMeanPooling, 0 modality embeddings).
+- **Training**: 2 epochs on 360,957 clean train samples (LR 3e-4, $\tau=0.07$, batch size 128, CUDA AMP).
+- **Validation Evaluation (1k sampled queries vs 20,115 clean corpus)**:
+  - **MRR**: **0.3714** [0.3469, 0.3976] | **R@1**: **0.2820** | **R@5**: **0.4630** | **R@10**: **0.5430** | **NDCG@10**: **0.4042**
+  - **MLflow Run ID**: `8cc3cb36b0494d42be6bf7253c3ab2e1`.
+
+#### 2. Phase R2-B (Shared Encoder — Learned Modality Embeddings & Fallback Grid)
+- **Model**: `SharedEncoder` (~7.38M params, adds learned 2x256 modality embeddings).
+- **Initial Pilot Run ($3\text{e-}4, \tau=0.07$)**:
+  - Full Val MRR (20,115 queries): **0.3423** [0.3366, 0.3480] | Low-Overlap MRR: **0.2433**.
+  - **Gate Assessment**: FAILED (Target: MRR $\ge 0.3910$ or Low-Overlap $> 0.2489$).
+- **Pre-Registered Fallback Tuning Grid Execution (Protocol v1.1 §3.3)**:
+  - Conducted all 6 configurations ($3 \text{ LRs} \times 2 \text{ Temperatures}$) for 2 epochs on clean train split and evaluated on the full 20,115 validation set:
+    1. **`lr_5e-4_tau_0.05`**: **Val MRR = 0.4033**, Low-Overlap = **0.2931**, R@1 = **0.3038**, R@10 = **0.5914** (**OFFICIALLY PASSES BOTH CRITERIA**).
+    2. `lr_5e-4_tau_0.07`: Val MRR = 0.3832, Low-Overlap = 0.2777.
+    3. `lr_3e-4_tau_0.05`: Val MRR = 0.3627, Low-Overlap = 0.2546.
+    4. `lr_3e-4_tau_0.07`: Val MRR = 0.3423, Low-Overlap = 0.2433.
+    5. `lr_1e-4_tau_0.05`: Val MRR = 0.2435, Low-Overlap = 0.1542.
+    6. `lr_1e-4_tau_0.07`: Val MRR = 0.2307, Low-Overlap = 0.1486.
+- **Winning Recipe Frozen**: $\text{LR} = 5\text{e-}4, \tau = 0.05$, AdamW, weight decay 0.01, 10% warmup, cosine decay.
+
+### 12.5 Phase R2-C: BM25 Hard Negative Mining (Complete)
+
+- **Corpus**: `data/processed_clean_v2/train.parquet` (360,957 clean Python functions).
+- **BM25 Inverted Index**: ATIRE piecewise floor (`bm25_train_index.pkl`, 196,172 terms).
+- **High-Throughput CSR Sparse Matmul Engine**: Mined all 360,957 queries in **130.17 seconds** (**2,772.9 queries/second**).
+- **3-Tier Pre-Registered False-Negative Filters**:
+  1. **Tier 1 (Identical Query Docstrings)**: Purged **12,448** false-negative collisions.
+  2. **Tier 2 (Normalized AST Skeleton $\ge 20$ nodes)**: Purged **5,589** syntactic clone false negatives.
+  3. **Tier 3 (MinHash 3-gram $J \ge 0.70$)**: Purged **557** lexical near-duplicate false negatives.
+  4. **Total Purged False Negatives**: **18,594** semantic duplicates successfully removed from contrastive denominator.
+- **Output Artifact**: `data/processed_clean_v2/train_hard_negatives.pt` (Shape: `(360957, 7)`, `torch.int32`).
+- **Integrity Verification**: 0 self-matches ($j \ne i$), 0 duplicate indices per row, all indices valid within $[0, 360956]$.
+

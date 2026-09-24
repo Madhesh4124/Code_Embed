@@ -11,7 +11,7 @@
 > - Frozen Research Protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`)
 > - Protocol Errata & Deviations: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
 > - Active Branch: `r-phase`
-> - Current Milestone: **Phase R2-A (Basic Encoder)** and **Phase R2-B (Shared Encoder)** COMPLETE. Clean Val MRR: Basic = **0.3714**, Shared = **0.3393** (Δ_modality = -0.0321). Next: Phase R2-C (BM25 Hard Negative Mining).
+> - Current Milestone: **Phase R2-A (Basic)**, **Phase R2-B (Shared)**, and **Phase R2-C (BM25 Hard Negative Mining)** COMPLETE. Mined 360,957 clean train queries in 130.2s with 3-tier filters (18,594 false negatives purged). Next: Phase R2-D (Hard Negative Shared Encoder Retraining).
 
 ---
 
@@ -23,8 +23,8 @@
 | Phase R1: Clean BM25 Lexical Baseline | 🟢 Completed | 2026-09-20 | ATIRE variant: Full test (19,632 queries) MRR **0.5108** [0.5047, 0.5166]; Val MRR **0.5214** [0.5152, 0.5275]; logged to MLflow |
 | Phase R2-A: Model 1 — Basic Encoder | 🟢 Completed | 2026-09-23 | 2 epochs on clean data: Val MRR **0.3714** [0.3469, 0.3976], R@1 **0.2820**, R@10 **0.5430**; BaseEncoder (~7.38M, 0 modality); MLflow Run `8cc3cb36b0494d42be6bf7253c3ab2e1` |
 | Phase R2-B: Model 2 — Shared Encoder | 🟢 Completed | 2026-09-24 | Pilot initial: 0.3423; Fallback Grid complete (6 runs). Winner `lr_5e-4_tau_0.05` achieves Full Val MRR **0.4033** (Low-Overlap: **0.2931**), PASSING both Pilot Gate criteria! |
-| Phase R2-C: BM25 Hard Negative Mining | ⬜ Next Action | 2026-09-24 | Vectorized BM25 mining on clean train split with 3-tier false negative filters |
-| Phase R2-D: Hard Negative Shared Encoder | ⬜ Pending R2-C | 2026-09-23 | Retrain from scratch (7 in-batch + 1 hard negative) for 2 epochs to isolate Δ_mining |
+| Phase R2-C: BM25 Hard Negative Mining | 🟢 Completed | 2026-09-24 | 360,957 clean train queries mined in 130.2s (2,773 q/s); 3-tier filters purged 18,594 false negatives (12,448 docstring + 5,589 AST skeleton + 557 MinHash); output matrix (360957, 7) saved to `data/processed_clean_v2/train_hard_negatives.pt` |
+| Phase R2-D: Hard Negative Shared Encoder | ⬜ Next Action | 2026-09-24 | Retrain Shared Encoder from scratch (7 in-batch + 1 hard negative) with winning recipe (LR 5e-4, τ=0.05, 2 epochs) to isolate Δ_mining |
 | Dual Encoder (Teammate Track) | 📋 Delegated | 2026-09-20 | Model 3 handover config `configs/dual_clean.yaml` ready for independent execution by teammate (RQ1) |
 
 ---
