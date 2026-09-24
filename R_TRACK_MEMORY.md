@@ -189,17 +189,28 @@ All requested validation gates have been empirically verified:
 | **High-Overlap ($c > 0.30$)** | 13,214 | 65.69% | **0.6745** | **0.4026** | 0.3029 | 0.5921 |
 | **OVERALL** | 20,115 | 100.00% | **0.5214** | **0.3423** | 0.2500 | 0.5194 |
 
-#### Official Pilot Gate Assessment (Protocol v1.1 §3.3):
-1. **Primary Gate**: Validation $\text{MRR} \ge 0.75 \times 0.5214 = \mathbf{0.3910}$.
-   - Actual: **0.3423** $\implies$ **[FAIL]** (margin: -0.0487).
-2. **Alternative Low-Overlap Gate**: Low-Overlap Validation $\text{MRR} > \mathbf{0.2489}$.
-   - Actual: **0.2433** $\implies$ **[FAIL]** (margin: -0.0056).
-3. **Pre-Registered Fallback Action**:
-   - Because both criteria failed, do NOT tweak hyperparameters ad hoc.
-   - Execute the pre-registered capped fallback tuning grid across all arms:
-     - 3 Learning Rates: $\{1\text{e-}4, 3\text{e-}4, 5\text{e-}4\}$
-     - 2 Temperatures: $\{0.05, 0.07\}$
-     - Total: 6 validation runs. The single highest-MRR configuration on validation is adopted across all comparison arms.
+#### Official Pilot Gate Assessment & Fallback Grid Execution (Protocol v1.1 §3.3):
+1. **Initial Pilot Run ($3\text{e-}4, \tau = 0.07$)**:
+   - Primary Gate ($\ge 0.3910$): **0.3423** [FAIL]
+   - Alternative Low-Overlap Gate ($> 0.2489$): **0.2433** [FAIL]
+2. **Pre-Registered Capped Fallback Tuning Grid Execution (All 6 Runs)**:
+   Per protocol mandate, we executed the 6-run grid on clean validation data without ad-hoc parameter exploration:
+
+   | Rank | Configuration Tag | Learning Rate | Temp ($\tau$) | Full Val MRR | Low-Overlap MRR | Recall@1 | Recall@10 | Gate Status |
+   |:---:|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+   | **1** | **`lr_5e-4_tau_0.05`** | **$5.0\text{e-}4$** | **$0.05$** | **0.4033** | **0.2931** | **0.3038** | **0.5914** | 🟢 **PASS (Both Criteria)** |
+   | **2** | `lr_5e-4_tau_0.07` | $5.0\text{e-}4$ | $0.07$ | **0.3832** | 0.2777 | 0.2855 | 0.5692 | 🟢 Pass (Low-Overlap) |
+   | **3** | `lr_3e-4_tau_0.05` | $3.0\text{e-}4$ | $0.05$ | **0.3627** | 0.2546 | 0.2678 | 0.5462 | 🟢 Pass (Low-Overlap) |
+   | **4** | `lr_3e-4_tau_0.07` | $3.0\text{e-}4$ | $0.07$ | **0.3423** | 0.2433 | 0.2500 | 0.5194 | ❌ Fail |
+   | **5** | `lr_1e-4_tau_0.05` | $1.0\text{e-}4$ | $0.05$ | **0.2435** | 0.1542 | 0.1687 | 0.3883 | ❌ Fail |
+   | **6** | `lr_1e-4_tau_0.07` | $1.0\text{e-}4$ | $0.07$ | **0.2307** | 0.1486 | 0.1600 | 0.3701 | ❌ Fail |
+
+3. **Key Empirical & Optimization Takeaways**:
+   - **Higher LR ($5\text{e-}4$) with 10% Warmup is Essential for Cold-Start Transformers**: Training compact 4-layer encoders from scratch requires $5\text{e-}4$ to rapidly escape initial unaligned random embeddings within 2 epochs (+6.1 MRR points over $3\text{e-}4$, +16.0 MRR points over $1\text{e-}4$).
+   - **Sharper Contrastive Temperature ($\tau = 0.05$) Strictly Dominates $\tau = 0.07$**: Applying a $20\times$ logit scale consistently improves retrieval across all learning rates by +1.3 to +2.0 MRR points by penalizing challenging in-batch false negatives more severely.
+   - **Winning Configuration**: **`lr_5e-4_tau_0.05`** (Checkpoint: `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt`).
+   - **Gate Outcome**: **PASSES PRIMARY GATE** ($0.4033 \ge 0.3910$) and **PASSES LOW-OVERLAP GATE** ($0.2931 > 0.2489$).
+   - **Locked Standard Recipe**: $(\text{LR} = 5\text{e-}4, \tau = 0.05)$ is officially frozen and adopted across all comparison arms.
 
 ---
 
@@ -282,8 +293,10 @@ We adopt the phase-by-phase model hierarchy from the original [`Phases.md`](Phas
 - **Commit Strategy**: Modular commits per remediation phase:
   - Phase R0: Clean Data Preprocessing, AST coordinate slicing, MinHash LSH deduplication, and data integrity tests.
   - Phase R1: Clean Lexical Baseline calibration (ATIRE variant), exact test NN Jaccard audit, and protocol errata.
-- **Current Status**: Phase R2-A (Basic Encoder: Val MRR = 0.3714) and Phase R2-B (Shared Encoder: Val MRR = 0.3393) complete. Isolated $\Delta_{\text{modality}} = -0.0321$ for RQ2. Pilot Gate evaluated.
-- **Next Action**: Launch Phase R2-C: BM25 Hard Negative Mining on clean train data (`data/processed_clean_v2/train.parquet`) with 3-tier false negative filters, followed by Phase R2-D: Hard-Negative Shared Encoder retraining from scratch.
+- **Current Status**: Phase R2-A (Basic Encoder: Val MRR = 0.3714) and Phase R2-B (Shared Encoder: Pilot initial Val MRR = 0.3423, Fallback Grid Winner `lr_5e-4_tau_0.05` Val MRR = **0.4033**) complete. Pilot Gate OFFICIALLY PASSED ($0.4033 \ge 0.3910$ and Low-Overlap $0.2931 > 0.2489$). Standard recipe frozen at $(\text{LR}=5\text{e-}4, \tau=0.05)$.
+- **Next Action**: 
+  1. Conduct 3-seed replication (seeds 42, 123, 456) of winning recipe $(\text{LR}=5\text{e-}4, \tau=0.05)$ and evaluate on test once with paired bootstrap vs BM25.
+  2. Launch Phase R2-C: BM25 Hard Negative Mining on clean train data (`data/processed_clean_v2/train.parquet`) with 3-tier false negative filters, followed by Phase R2-D: Hard-Negative Shared Encoder retraining from scratch.
 
 
 
