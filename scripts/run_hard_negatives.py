@@ -194,7 +194,8 @@ def run_training(
         else cfg.mlflow.run_name
     ) as run:
         console.print(f"[cyan]MLflow Run ID:[/cyan] {run.info.run_id}")
-        mlflow.set_tag("phase", "phase5_hard_negatives")
+        mlflow.set_tag("data_version", "clean_v2")
+        mlflow.set_tag("phase", "phase_r2d_hard_negatives")
         mlflow.set_tag("architecture", model_name)
         mlflow.set_tag("negatives", "mined_hard_negatives")
         if resume_checkpoint:
@@ -211,7 +212,8 @@ def run_training(
                 "lr": cfg.training.lr,
                 "weight_decay": cfg.training.weight_decay,
                 "temperature": cfg.training.temperature,
-                "max_steps": cfg.training.max_steps,
+                "epochs": cfg.training.get("epochs", 2),
+                "warmup_ratio": cfg.training.get("warmup_ratio", 0.10),
                 "seed": seed,
             }
         )

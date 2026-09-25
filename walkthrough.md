@@ -573,3 +573,28 @@ To avoid candidate bucket bias from LSH, an exact inverted index over word 3-gra
 - **Output Artifact**: `data/processed_clean_v2/train_hard_negatives.pt` (Shape: `(360957, 7)`, `torch.int32`).
 - **Integrity Verification**: 0 self-matches ($j \ne i$), 0 duplicate indices per row, all indices valid within $[0, 360956]$.
 
+### 12.6 Phase R2-D: Hard-Negative Shared Encoder Retraining (Complete)
+
+- **Model**: `SharedEncoder` (~7.38M parameters, 4 Pre-LN layers, $d_{\text{model}}=256$, 8 heads, $d_{\text{ff}}=1024$, learned modality embeddings).
+- **Training Recipe**: 2 epochs on 360,957 clean train samples (5,638 optimization steps, batch size 128, AdamW, $\text{LR} = 5\text{e-}4, \tau = 0.05$, weight decay 0.01, 10% proportional linear warmup, cosine decay).
+- **Negatives Scheme**: 1 mined BM25 hard negative (from `train_hard_negatives.pt`) + in-batch negatives per sample, with false-negative masking.
+- **Hardware & Latency**: 41.71 minutes on NVIDIA GeForce RTX 4050 Laptop GPU (CUDA AMP).
+- **MLflow Tracking**: Run ID `c4e2e5c02be74bf19eacf4ea4fc68c5c` in experiment `codeembed-clean-baselines`. Evaluation Run ID `c830e03c00424564b19280db5e3dd9c0`.
+- **Full Validation Benchmark (ALL 20,115 validation queries against full 20,115 clean corpus)**:
+  - **Overall MRR**: **0.4074** (95% CI: [0.4015, 0.4135])
+  - **Recall@1**: **0.3091** (6,218 / 20,115)
+  - **Recall@5**: **0.5166** (10,392 / 20,115)
+  - **Recall@10**: **0.5976** (12,020 / 20,115)
+  - **NDCG@10**: **0.4458**
+  - **Stratified Overlap Performance**:
+    - **Zero-Overlap (580 queries)**: MRR = **0.0523** (vs BM25 **0.0023**, Recall@1 = 0.0241, Recall@10 = 0.1069)
+    - **Low-Overlap (6,321 queries)**: MRR = **0.3047** (vs BM25 **0.2489**, In-Batch Shared **0.2931**, Recall@1 = 0.2080, Recall@10 = 0.4977)
+    - **High-Overlap (13,214 queries)**: MRR = **0.4721** (Recall@1 = 0.3700, Recall@10 = 0.6669)
+- **1,000 Sampled Validation Benchmark**:
+  - **MRR**: **0.4116** [0.3843, 0.4390] | **Recall@1**: **0.3130** | **Recall@5**: **0.5260** | **Recall@10**: **0.6060** | **NDCG@10**: **0.4509**
+- **Scientific Impact & RQ3 Answer**:
+  - Hard negative mining lifts overall retrieval from 0.4033 to **0.4074** ($\Delta_{\text{mining}} = \mathbf{+0.0041}$ overall).
+  - On the critical semantic retrieval slice (**Low-Overlap queries**), hard negative mining yields a strong gain of **+1.16 MRR points** (0.3047 vs 0.2931), outperforming lexical BM25 by **+5.58 MRR points** (0.3047 vs 0.2489).
+  - Solidly passes both Pilot Gate criteria ($0.4074 \ge 0.3910$ and $0.3047 > 0.2489$).
+
+

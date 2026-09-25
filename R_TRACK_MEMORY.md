@@ -230,6 +230,34 @@ All requested validation gates have been empirically verified:
   - Shape: `(360957, 7)`, Dtype: `torch.int32`.
   - Integrity: Verified zero self-matches ($j \ne i$), zero row duplicates, all indices within $[0, 360956]$.
 
+### 5.7 Phase R2-D: Hard-Negative Shared Encoder Retraining (Complete)
+- **Model**: `SharedEncoder` (~7.38M parameters, 4L-256d-8h-1024ff, Pre-LN, MaskedMeanPooling, learned modality embeddings `nn.Embedding(2, 256)`).
+- **Training**: 2 epochs on 360,957 clean train samples (5,638 total steps, batch size 128, AdamW, winning recipe: $\text{LR} = 5\text{e-}4, \tau = 0.05, \text{weight decay} = 0.01$, 10% proportional warmup, cosine decay).
+- **Negatives Scheme**: 1 mined BM25 hard negative (from `train_hard_negatives.pt`) + in-batch negatives per sample, with false-negative masking.
+- **Hardware & Latency**: 41.71 minutes total on NVIDIA GeForce RTX 4050 Laptop GPU (CUDA AMP).
+- **MLflow Tracking**: Logged to `sqlite:///mlflow.db` under experiment `codeembed-clean-baselines` (Run ID: `c4e2e5c02be74bf19eacf4ea4fc68c5c`). Evaluation Run ID: `c830e03c00424564b19280db5e3dd9c0`.
+- **Validation Evaluation (FULL 20,115 validation queries against full 20,115 clean corpus)**:
+  - **Overall MRR**: **0.4074** (95% CI: [0.4015, 0.4135])
+  - **Recall@1**: **0.3091** (6,218 / 20,115)
+  - **Recall@5**: **0.5166** (10,392 / 20,115)
+  - **Recall@10**: **0.5976** (12,020 / 20,115)
+  - **NDCG@10**: **0.4458**
+  - **Pre-Registered Overlap Stratification**:
+    - **Zero-Overlap (580 queries)**: Neural MRR = **0.0523** (vs BM25 **0.0023**, Recall@1 = 0.0241, Recall@10 = 0.1069)
+    - **Low-Overlap (6,321 queries)**: Neural MRR = **0.3047** (vs BM25 **0.2489**, In-Batch Shared **0.2931**, Recall@1 = 0.2080, Recall@10 = 0.4977)
+    - **High-Overlap (13,214 queries)**: Neural MRR = **0.4721** (Recall@1 = 0.3700, Recall@10 = 0.6669)
+- **1,000 Sampled Validation Benchmark**:
+  - **MRR**: **0.4116** [0.3843, 0.4390]
+  - **Recall@1**: **0.3130**
+  - **Recall@5**: **0.5260**
+  - **Recall@10**: **0.6060**
+  - **NDCG@10**: **0.4509**
+- **RQ3 Isolation ($\Delta_{\text{mining}} = \text{MRR}(\text{Hard}) - \text{MRR}(\text{In-Batch})$)**:
+  - Full Validation Overall: $\mathbf{+0.0041}$ (+0.41 MRR points: 0.4074 vs 0.4033).
+  - Low-Overlap Specific: $\mathbf{+0.0116}$ (+1.16 MRR points: 0.3047 vs 0.2931).
+  - Low-Overlap vs BM25: $\mathbf{+0.0558}$ (+5.58 MRR points over lexical retrieval).
+  - Both Pilot Gate criteria remain solidly passed.
+
 ---
 
 ## 6. Model Progression (Option 1: Faithful Phase-by-Phase)
@@ -311,9 +339,12 @@ We adopt the phase-by-phase model hierarchy from the original [`Phases.md`](Phas
 - **Commit Strategy**: Modular commits per remediation phase:
   - Phase R0: Clean Data Preprocessing, AST coordinate slicing, MinHash LSH deduplication, and data integrity tests.
   - Phase R1: Clean Lexical Baseline calibration (ATIRE variant), exact test NN Jaccard audit, and protocol errata.
-- **Current Status**: Phase R2-A (Basic Encoder), Phase R2-B (Shared Encoder, Fallback Grid Winner `lr_5e-4_tau_0.05` Val MRR = **0.4033**), and Phase R2-C (BM25 Hard Negative Mining, 360,957 clean train queries mined with 3-tier filters, 18,594 false negatives purged) complete. Pilot Gate OFFICIALLY PASSED ($0.4033 \ge 0.3910$ and Low-Overlap $0.2931 > 0.2489$). Standard recipe frozen at $(\text{LR}=5\text{e-}4, \tau=0.05)$.
+- **Current Status**: Phase R2-A (Basic Encoder), Phase R2-B (Shared Encoder, Fallback Winner `lr_5e-4_tau_0.05` Val MRR = **0.4033**), Phase R2-C (BM25 Hard Negative Mining, 18,594 false negatives purged), and Phase R2-D (Hard-Negative Shared Encoder, Full Val MRR = **0.4074**, Low-Overlap = **0.3047**) COMPLETE. Both Pilot Gate criteria solidly passed. $\Delta_{\text{mining}} = \mathbf{+0.0116}$ on Low-Overlap queries (+5.58 pts over BM25).
 - **Next Action**: 
-  1. Launch Phase R2-D: Hard-Negative Shared Encoder retraining from scratch (7 in-batch + 1 hard negative per sample) using `configs/shared_hard_clean.yaml` to measure $\Delta_{\text{mining}} = \text{MRR}(\text{Hard}) - \text{MRR}(\text{In-Batch})$ on validation data (RQ3).
+  1. Phase R4: Architecture & Hyperparameter Ablations on clean data:
+     - Pooling: MaskedMeanPooling vs CLSPooling
+     - Temperature: $\tau \in \{0.05, 0.07, 0.10\}$
+     - Sequence Length: $L \in \{128, 256\}$
   2. Conduct 3-seed replication (seeds 42, 123, 456) of winning recipe $(\text{LR}=5\text{e-}4, \tau=0.05)$ and evaluate on test once with paired bootstrap vs BM25.
 
 
