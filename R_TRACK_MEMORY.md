@@ -258,6 +258,19 @@ All requested validation gates have been empirically verified:
   - Low-Overlap vs BM25: $\mathbf{+0.0558}$ (+5.58 MRR points over lexical retrieval).
   - Both Pilot Gate criteria remain solidly passed.
 
+### 5.5 Phase R4: Architecture & Hyperparameter Ablations (Complete)
+All ablations evaluated on the full clean validation set ($N = 20,115$ queries vs 20,115 code corpus, 1,000 bootstrap resamples):
+
+| Experiment | Category | Variant | Full Val MRR [95% CI] | Val R@1 | Val R@5 | Val R@10 | Val NDCG@10 | Train Time | MLflow Run ID |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **In-Batch Reference** | Baseline | Mean, $L=256, \tau=0.05$ | **0.4033** [0.3973, 0.4093] | **0.3038** | **0.5118** | **0.5914** | **0.4412** | 38.50m | `best_lr_5e-4_tau_0.05.pt` |
+| **Hard Negative Shared** | Reference | Mean, $L=256, \tau=0.05$ | **0.4074** [0.4015, 0.4135] | **0.3091** | **0.5166** | **0.5976** | **0.4458** | 41.71m | `c4e2e5c02be74bf19eacf4ea4fc68c5c` |
+| **`ablation_pooling_cls`** | Pooling | CLSPooling ($L=256$) | **0.1566** [0.1524, 0.1605] | **0.0957** | **0.2120** | **0.2751** | **0.1762** | 38.55m | `1dd691e839ee4684b17d990b51cde549` |
+| **`ablation_seq_len_128`** | Sequence Length | $L=128$ (Mean) | **0.3943** [0.3886, 0.4002] | **0.2965** | **0.4998** | **0.5801** | **0.4314** | **21.71m** | `ef009dd84a66465a92847ab378b0bdea` |
+
+- **Ablation 1 Takeaway**: Without MLM pretraining, `CLSPooling` suffers catastrophic collapse ($\Delta = \mathbf{-0.2467}$, $-61.2\%$ relative drop). `MaskedMeanPooling` is essential.
+- **Ablation 2 Takeaway**: Sequence length $L=128$ achieves **$97.77\%$ retrieval retention** with a **$1.78\times$ training throughput speedup** and $4\times$ lower attention memory footprint.
+
 ---
 
 ## 6. Model Progression (Option 1: Faithful Phase-by-Phase)

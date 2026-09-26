@@ -118,7 +118,10 @@
 | **Phase R1** | `14feca9d5b024faab9da64beac12541b` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5214 [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | 🟢 Completed (Full Val) |
 | **Phase R1 (Test)** | `fb3b5313f1bb419bb330b7fc0dee6bf5` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5108 [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | 🟢 Completed (Full Test) |
 | **Phase R2-B (Pilot Initial)** | `3e1ae6f598c1428a9eafb016edbb7592` | SharedEncoder (LR=3e-4, τ=0.07) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.3423** [0.3366, 0.3480] | 0.2500 | 0.4425 | 0.5194 | 0.3768 | 🟢 Completed (Full Val) |
-| **Phase R2-B (Fallback Winner)** | `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt` | SharedEncoder (LR=5e-4, τ=0.05) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.4033** | **0.3038** | **0.5118** | **0.5914** | — | 🟢 **PASS (Gate >= 0.3910)** |
+| **Phase R2-B (Fallback Winner)** | `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt` | SharedEncoder (LR=5e-4, τ=0.05) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.4033** [0.3973, 0.4093] | **0.3038** | **0.5118** | **0.5914** | **0.4412** | 🟢 **PASS (Gate >= 0.3910)** |
+| **Phase R2-D** | `c4e2e5c02be74bf19eacf4ea4fc68c5c` | SharedEncoder (Hard Negatives) | 7.38M | Learned (2x256) | 1 BM25 Hard + In-batch | 2 | **0.4074** [0.4015, 0.4135] | **0.3091** | **0.5166** | **0.5976** | **0.4458** | 🟢 **PASS (+0.41 MRR pts, +1.16 Low)** |
+| **Phase R4 (Ablation 1)** | `1dd691e839ee4684b17d990b51cde549` | AblationShared (CLSPooling) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.1566** [0.1524, 0.1605] | **0.0957** | **0.2120** | **0.2751** | **0.1762** | 🟢 Completed (-0.2467 vs Mean) |
+| **Phase R4 (Ablation 2)** | `ef009dd84a66465a92847ab378b0bdea` | AblationShared (SeqLen L=128) | 7.35M | Learned (2x256) | In-batch (masked) | 2 | **0.3943** [0.3886, 0.4002] | **0.2965** | **0.4998** | **0.5801** | **0.4314** | 🟢 Completed (97.8% retention, 1.8x speedup) |
 
 ### Historical Leaky Architecture Experiments (Superseded)
 | Phase | Run ID | Model | Params | Tokenizer | Negatives | Epochs | MRR | R@1 | R@5 | R@10 | Status |
