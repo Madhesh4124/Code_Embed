@@ -1,0 +1,44 @@
+model:
+  name: "dual"
+  vocab_size: 16000
+  d_model: 256
+  n_layers: 4        # Fixed: was 3 (25% depth bottleneck vs Basic Encoder)
+  n_heads: 8
+  d_ff: 1024
+  max_seq_len: 256
+  dropout: 0.1
+
+hard_negatives:
+  index_path: "data/hard_negatives/train_bm25_hard_neg_indices.npy"
+  init_checkpoint: "checkpoints/basic/best_basic.pt"   # Warm-start from Basic Encoder!
+  k_mined: 50
+  max_hard_negs: 5
+  hn_weight: 1.0
+
+data:
+  train_path: "data/processed_clean_v2/train.parquet"
+  val_path: "data/processed_clean_v2/validation.parquet"
+  test_path: "data/processed_clean_v2/test.parquet"
+  tokenizer_path: "tokenizer/tokenizer.json"
+  batch_size: 64
+  num_workers: 0
+  pin_memory: true
+
+training:
+  lr: 2.0e-5         # Fixed: was 1e-4 (too aggressive for fine-tuning warm weights)
+  weight_decay: 0.01
+  grad_clip: 1.0
+  temperature: 0.07
+  epochs: 10
+  max_steps: 15000
+  warmup_steps: 500  # Fixed: was 200 (more warmup needed for stable fine-tuning)
+  log_every_steps: 100
+  val_every_steps: 1000
+  seed: 42
+
+checkpoint_dir: "checkpoints/dual_fixed"
+
+mlflow:
+  tracking_uri: "mlruns"
+  experiment_name: "CodeEmbed_DualFixed"
+  run_name: "dual-fixed-warm-start-hard-neg"
