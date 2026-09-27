@@ -81,10 +81,14 @@ class TestBM25HardNegativeMiner:
         miner = BM25HardNegativeMiner(bm25)
 
         # Query 0 corresponds to code 0 (calculate_mean)
-        negs = miner.mine_query_negatives(query="calculate mean average", true_doc_idx=0, k=2)
+        negs = miner.mine_query_negatives(
+            query="calculate mean average", true_doc_idx=0, k=2
+        )
 
         assert len(negs) == 2
-        assert 0 not in negs, "Target document index 0 must NOT be in the mined negative list!"
+        assert 0 not in negs, (
+            "Target document index 0 must NOT be in the mined negative list!"
+        )
 
     def test_miner_corpus_matrix_shape(self):
         """Miner should produce an (N, K) int32 matrix."""
@@ -103,6 +107,113 @@ class TestBM25HardNegativeMiner:
         assert matrix.dtype == np.int32
         for i in range(3):
             assert i not in matrix[i]
+
+    def test_miner_excludes_identical_docstrings(self):
+        """Tier 1 filter: candidates with identical query docstring text must be excluded."""
+        codes = [
+            "def foo(x): return x + 1",
+            "def bar(x): return x + 2",
+            "def baz(x): return x * 10",
+        ]
+        bm25 = BM25Retriever()
+        bm25.index(codes)
+        docstring_ids = np.array([0, 0, 1], dtype=np.int64)
+
+        miner = BM25HardNegativeMiner(bm25, docstring_ids=docstring_ids)
+        # Query 0: doc 1 shares docstring ID 0, so it must be excluded
+        negs = miner.mine_query_negatives(query="add one to value", true_doc_idx=0, k=1)
+        assert 0 not in negs
+        assert 1 not in negs
+        assert negs == [2]
+
+    def test_miner_excludes_matching_ast_skeletons(self):
+        """Tier 2 filter: candidates with >= 20 AST nodes and matching normalized skeleton must be excluded."""
+        # Non-trivial functions with >= 20 AST nodes
+        code0 = (
+            "def process_a(x, y, z):\n"
+            "    a = x + y\n"
+            "    b = a + z\n"
+            "    c = b * 2\n"
+            "    return c + 10\n"
+        )
+        code1 = (
+            "def process_b(alpha, beta, gamma):\n"
+            "    foo = alpha + beta\n"
+            "    bar = foo + gamma\n"
+            "    baz = bar * 5\n"
+            "    return baz + 99\n"
+        )
+        code2 = (
+            "def completely_different(n):\n"
+            "    while n > 0:\n"
+            "        n -= 1\n"
+            "    return n\n"
+        )
+        codes = [code0, code1, code2]
+        bm25 = BM25Retriever()
+        bm25.index(codes)
+
+        from training.hard_negatives import compute_ast_skeleton_hash
+
+        skel_hashes = np.array([
+            compute_ast_skeleton_hash(code0),
+            compute_ast_skeleton_hash(code1),
+            compute_ast_skeleton_hash(code2),
+        ], dtype=np.int64)
+
+        assert skel_hashes[0] == skel_hashes[1] and skel_hashes[0] != -1
+
+        miner = BM25HardNegativeMiner(bm25, skeleton_hashes=skel_hashes)
+        negs = miner.mine_query_negatives(query="process variables", true_doc_idx=0, k=1)
+        assert 0 not in negs
+        assert 1 not in negs, "Doc 1 shares AST skeleton with Doc 0 and must be excluded!"
+        assert negs == [2]
+
+    def test_miner_excludes_minhash_near_duplicates(self):
+        """Tier 3 filter: candidates with MinHash Jaccard >= 0.70 must be excluded."""
+        code0 = (
+            "def get_user_data(user_id, active=True, verbose=False):\n"
+            "    user = database.fetch_user(user_id)\n"
+            "    if user is not None and user.is_active == active:\n"
+            "        result = user.to_dict(with_metadata=True)\n"
+            "        if verbose:\n"
+            "            print('success')\n"
+            "        return result\n"
+            "    return None\n"
+        )
+        code1 = (
+            "def get_user_data(user_id, active=True, verbose=False):\n"
+            "    user = database.fetch_user(user_id)\n"
+            "    if user is not None and user.is_active == active:\n"
+            "        result = user.to_dict(with_metadata=False)\n"
+            "        if verbose:\n"
+            "            print('success')\n"
+            "        return result\n"
+            "    return None\n"
+        )
+        code2 = "def print_matrix(mat): print(mat)"
+
+        codes = [code0, code1, code2]
+        bm25 = BM25Retriever()
+        bm25.index(codes)
+
+        from training.hard_negatives import DeterministicMinHash
+
+        mh = DeterministicMinHash(64)
+        minhash_sigs = np.stack([
+            mh.compute_signature(code0),
+            mh.compute_signature(code1),
+            mh.compute_signature(code2),
+        ])
+
+        j_01 = np.count_nonzero(minhash_sigs[0] == minhash_sigs[1]) / 64.0
+        assert j_01 >= 0.70, f"Expected J >= 0.70, got {j_01}"
+
+        miner = BM25HardNegativeMiner(bm25, minhash_sigs=minhash_sigs)
+        negs = miner.mine_query_negatives(query="get user data", true_doc_idx=0, k=1)
+        assert 0 not in negs
+        assert 1 not in negs, "Doc 1 is MinHash near-duplicate (J >= 0.70) and must be excluded!"
+        assert negs == [2]
 
 
 class TestCollatorHardNegatives:

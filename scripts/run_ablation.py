@@ -47,7 +47,9 @@ class AblationTrainer(ContrastiveTrainer):
 
     def train(self) -> dict[str, float]:
         """Execute training loop with ASCII milestone line logging for Windows compatibility."""
-        self.console.print(f"[bold green]Starting Training on {self.device.type.upper()}[/bold green]")
+        self.console.print(
+            f"[bold green]Starting Training on {self.device.type.upper()}[/bold green]"
+        )
         total_params, trainable_params = self.model.get_num_params()
         self.console.print(
             f"Model Parameters: {trainable_params:,} trainable / {total_params:,} total (~{total_params / 1e6:0.2f}M)"
@@ -56,7 +58,9 @@ class AblationTrainer(ContrastiveTrainer):
         start_time = time.time()
 
         for epoch in range(1, self.max_epochs + 1):
-            self.console.print(f"\n[bold cyan]Epoch {epoch}/{self.max_epochs}[/bold cyan]")
+            self.console.print(
+                f"\n[bold cyan]Epoch {epoch}/{self.max_epochs}[/bold cyan]"
+            )
             epoch_loss = 0.0
             epoch_steps = 0
 
@@ -95,18 +99,23 @@ class AblationTrainer(ContrastiveTrainer):
                     if val_mrr > self.best_val_score:
                         self.best_val_score = val_mrr
                         self.save_checkpoint(
-                            self.checkpoint_dir / f"checkpoint_step_{self.global_step}.pt",
+                            self.checkpoint_dir
+                            / f"checkpoint_step_{self.global_step}.pt",
                             epoch=epoch,
                             is_best=True,
                         )
-                        self.console.print(f" [OK] New best val MRR: {val_mrr:0.4f} saved")
+                        self.console.print(
+                            f" [OK] New best val MRR: {val_mrr:0.4f} saved"
+                        )
 
                 if self.global_step >= self.max_steps:
                     break
 
             # Epoch end validation
             avg_epoch_loss = epoch_loss / max(epoch_steps, 1)
-            self.console.print(f"Epoch {epoch} finished - Avg Loss: {avg_epoch_loss:0.4f}")
+            self.console.print(
+                f"Epoch {epoch} finished - Avg Loss: {avg_epoch_loss:0.4f}"
+            )
 
             if self.val_loader:
                 val_metrics = self.evaluate(max_val_batches=None)
@@ -126,11 +135,15 @@ class AblationTrainer(ContrastiveTrainer):
                 )
 
             if self.global_step >= self.max_steps:
-                self.console.print("[yellow]Reached max_steps limit. Concluding training.[/yellow]")
+                self.console.print(
+                    "[yellow]Reached max_steps limit. Concluding training.[/yellow]"
+                )
                 break
 
         total_duration = time.time() - start_time
-        self.console.print(f"\n[bold green]Training Completed in {total_duration / 60:0.2f} minutes.[/bold green]")
+        self.console.print(
+            f"\n[bold green]Training Completed in {total_duration / 60:0.2f} minutes.[/bold green]"
+        )
         return {"best_val_mrr": self.best_val_score}
 
 
@@ -140,21 +153,23 @@ def load_config(config_path: str | Path) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def evaluate_model_on_test(
+def evaluate_model_benchmark(
     model: torch.nn.Module,
-    split: str = "test",
+    split: str = "validation",
     max_seq_len: int | None = None,
     batch_size: int = 128,
-    sample_size: int = 1000,
+    sample_size: int | None = None,
     seed: int = 42,
     device: torch.device | None = None,
 ) -> dict[str, Any]:
-    """Evaluate trained model on the formal 1,000 test query retrieval benchmark."""
+    """Evaluate trained model on retrieval benchmark (strictly validation for Phase R4)."""
     if device is None:
         device = get_device()
 
     model.eval()
-    console.print(f"[cyan]Building {split} DataLoader (max_seq_len={max_seq_len or 256})...[/cyan]")
+    console.print(
+        f"[cyan]Building {split} DataLoader (max_seq_len={max_seq_len or 256})...[/cyan]"
+    )
     loader = get_ablation_dataloader(
         split=split,
         batch_size=batch_size,
@@ -163,7 +178,9 @@ def evaluate_model_on_test(
         num_workers=0,
     )
 
-    console.print(f"[cyan]Encoding {split} corpus and queries on {device.type.upper()}...[/cyan]")
+    console.print(
+        f"[cyan]Encoding {split} corpus and queries on {device.type.upper()}...[/cyan]"
+    )
     all_code_embs: list[np.ndarray] = []
     all_text_embs: list[np.ndarray] = []
 
@@ -185,9 +202,11 @@ def evaluate_model_on_test(
     corpus_embeddings = np.concatenate(all_code_embs, axis=0)
     query_embeddings = np.concatenate(all_text_embs, axis=0)
     total_docs = len(corpus_embeddings)
-    console.print(f"[green][OK][/green] Encoded {total_docs:,} corpus and query embeddings.")
+    console.print(
+        f"[green][OK][/green] Encoded {total_docs:,} corpus and query embeddings."
+    )
 
-    # Subsample 1,000 queries using fixed seed for exact cross-model reproducibility
+    # Subsample queries if sample_size is explicitly specified and < total_docs
     if sample_size and sample_size < total_docs:
         rng = np.random.RandomState(seed)
         sampled_indices = rng.choice(total_docs, size=sample_size, replace=False)
@@ -199,6 +218,9 @@ def evaluate_model_on_test(
     else:
         eval_queries = query_embeddings
         ground_truth = list(range(total_docs))
+        console.print(
+            f"[yellow]Evaluating all {total_docs:,} queries against full {total_docs:,} corpus.[/yellow]"
+        )
 
     console.print("[cyan]Computing similarity rankings...[/cyan]")
     ranks = compute_similarity_rankings(
@@ -209,14 +231,21 @@ def evaluate_model_on_test(
     )
 
     console.print("[cyan]Computing evaluation metrics & 1,000 bootstrap CIs...[/cyan]")
-    results = evaluate_rankings(ranks, ks=[1, 5, 10], bootstrap_resamples=1000, seed=seed)
+    results = evaluate_rankings(
+        ranks, ks=[1, 5, 10], bootstrap_resamples=1000, seed=seed
+    )
     return results
+
+
+# Backward compatibility alias
+evaluate_model_on_test = evaluate_model_benchmark
 
 
 def run_single_ablation(
     config_path: str | Path,
     epochs_override: int | None = None,
     smoke_test: bool = False,
+    sample_size_override: int | None = None,
 ) -> dict[str, Any]:
     """Execute a single ablation experiment from config."""
     cfg = load_config(config_path)
@@ -240,14 +269,22 @@ def run_single_ablation(
     set_seed(seed)
     device = get_device()
 
-    console.rule(f"[bold cyan]Ablation Experiment: {ml_cfg.get('run_name', 'ablation')}[/bold cyan]")
-    console.print(f"Device: {device.type.upper()} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})")
-    console.print(f"Ablation Category: [bold yellow]{a_cfg.get('category', 'unknown')}[/bold yellow]")
-    console.print(f"Ablation Variant:  [bold yellow]{a_cfg.get('variant', 'unknown')}[/bold yellow]")
+    console.rule(
+        f"[bold cyan]Ablation Experiment: {ml_cfg.get('run_name', 'ablation')}[/bold cyan]"
+    )
+    console.print(
+        f"Device: {device.type.upper()} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})"
+    )
+    console.print(
+        f"Ablation Category: [bold yellow]{a_cfg.get('category', 'unknown')}[/bold yellow]"
+    )
+    console.print(
+        f"Ablation Variant:  [bold yellow]{a_cfg.get('variant', 'unknown')}[/bold yellow]"
+    )
     console.print(f"Pooling Strategy:  {m_cfg.get('pooling', 'mean')}")
     console.print(f"Sequence Length:   {d_cfg.get('max_seq_len', 256)}")
-    console.print(f"Loss Temperature:  {t_cfg.get('temperature', 0.07)}")
-    console.print(f"Training Epochs:   {t_cfg.get('epochs', 1)}")
+    console.print(f"Loss Temperature:  {t_cfg.get('temperature', 0.05)}")
+    console.print(f"Training Epochs:   {t_cfg.get('epochs', 2)}")
 
     # 1. Instantiate Ablation Model
     model = AblationSharedEncoder(
@@ -263,7 +300,9 @@ def run_single_ablation(
     ).to(device)
 
     total_params, trainable_params = model.get_num_params()
-    console.print(f"Parameters: {trainable_params:,} trainable / {total_params:,} total (~{total_params / 1e6:0.2f}M)")
+    console.print(
+        f"Parameters: {trainable_params:,} trainable / {total_params:,} total (~{total_params / 1e6:0.2f}M)"
+    )
 
     # 2. Build DataLoaders
     batch_size = int(d_cfg.get("batch_size", 128))
@@ -289,39 +328,45 @@ def run_single_ablation(
     # 3. Setup MLflow Tracking (Unified Single Run)
     os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
-    exp_name = ml_cfg.get("experiment_name", "codeembed-phase6-ablations")
+    exp_name = ml_cfg.get("experiment_name", "codeembed-clean-ablations")
     mlflow.set_experiment(exp_name)
-    run_name = ml_cfg.get("run_name", f"phase6_{a_cfg.get('category')}_{a_cfg.get('variant')}")
+    run_name = ml_cfg.get(
+        "run_name", f"phaseR4_{a_cfg.get('category')}_{a_cfg.get('variant')}"
+    )
 
     with mlflow.start_run(run_name=run_name) as run:
         run_id = run.info.run_id
         console.print(f"[bold green]Active MLflow Run ID:[/bold green] {run_id}")
 
         # Log parameters & tags
-        mlflow.set_tags({
-            "phase": "6",
-            "phase_name": "Ablation Studies",
-            "ablation_category": str(a_cfg.get("category", "")),
-            "ablation_variant": str(a_cfg.get("variant", "")),
-            "pooling": str(m_cfg.get("pooling", "mean")),
-            "max_seq_len": str(max_seq_len),
-            "temperature": str(t_cfg.get("temperature", 0.07)),
-            "model_type": "ablation_shared",
-        })
+        mlflow.set_tags(
+            {
+                "phase": "R4",
+                "phase_name": "Ablation Studies",
+                "ablation_category": str(a_cfg.get("category", "")),
+                "ablation_variant": str(a_cfg.get("variant", "")),
+                "pooling": str(m_cfg.get("pooling", "mean")),
+                "max_seq_len": str(max_seq_len),
+                "temperature": str(t_cfg.get("temperature", 0.05)),
+                "model_type": "ablation_shared",
+            }
+        )
 
-        mlflow.log_params({
-            "d_model": m_cfg.get("d_model", 256),
-            "n_layers": m_cfg.get("n_layers", 4),
-            "n_heads": m_cfg.get("n_heads", 8),
-            "d_ff": m_cfg.get("d_ff", 1024),
-            "pooling": m_cfg.get("pooling", "mean"),
-            "max_seq_len": max_seq_len,
-            "temperature": t_cfg.get("temperature", 0.07),
-            "lr": t_cfg.get("lr", 3e-4),
-            "batch_size": batch_size,
-            "epochs": t_cfg.get("epochs", 1),
-            "total_params": total_params,
-        })
+        mlflow.log_params(
+            {
+                "d_model": m_cfg.get("d_model", 256),
+                "n_layers": m_cfg.get("n_layers", 4),
+                "n_heads": m_cfg.get("n_heads", 8),
+                "d_ff": m_cfg.get("d_ff", 1024),
+                "pooling": m_cfg.get("pooling", "mean"),
+                "max_seq_len": max_seq_len,
+                "temperature": t_cfg.get("temperature", 0.05),
+                "lr": t_cfg.get("lr", 5e-4),
+                "batch_size": batch_size,
+                "epochs": t_cfg.get("epochs", 2),
+                "total_params": total_params,
+            }
+        )
 
         # 4. Train Model
         trainer = AblationTrainer(
@@ -340,37 +385,49 @@ def run_single_ablation(
         # 5. Load Best Checkpoint for Evaluation
         best_ckpt = trainer.best_checkpoint_path
         if best_ckpt.exists():
-            console.print(f"[cyan]Loading best checkpoint for test evaluation from {best_ckpt}...[/cyan]")
+            console.print(
+                f"[cyan]Loading best checkpoint for validation evaluation from {best_ckpt}...[/cyan]"
+            )
             ckpt_data = torch.load(best_ckpt, map_location=device, weights_only=False)
             model.load_state_dict(ckpt_data["model_state_dict"])
         else:
-            console.print("[yellow]Best checkpoint file not found, evaluating current model weights...[/yellow]")
+            console.print(
+                "[yellow]Best checkpoint file not found, evaluating current model weights...[/yellow]"
+            )
 
-        # 6. Evaluate on Test Benchmark (1,000 queries vs 21,005 corpus)
-        sample_size = 50 if smoke_test else 1000
-        test_results = evaluate_model_on_test(
+        # 6. Evaluate on Validation Benchmark (all 20,115 queries vs 20,115 corpus, or subsampled)
+        if smoke_test:
+            eval_sample_size = 50
+        elif sample_size_override is not None:
+            eval_sample_size = sample_size_override
+        else:
+            eval_sample_size = None  # Full validation set: 20,115 queries vs 20,115 corpus
+
+        val_results = evaluate_model_benchmark(
             model=model,
-            split="test",
+            split="validation",
             max_seq_len=max_seq_len_arg,
             batch_size=batch_size,
-            sample_size=sample_size,
+            sample_size=eval_sample_size,
             seed=seed,
             device=device,
         )
 
-        # 7. Log Test Benchmark Metrics directly into this run
-        scalar_metrics = {k: v for k, v in test_results.items() if not k.endswith("_ci")}
+        # 7. Log Validation Benchmark Metrics directly into this run
+        scalar_metrics = {
+            k: v for k, v in val_results.items() if not k.endswith("_ci")
+        }
         for k, v in scalar_metrics.items():
-            mlflow.log_metric(f"test_{k.replace('@', '_at_')}", float(v))
+            mlflow.log_metric(f"val_{k.replace('@', '_at_')}", float(v))
 
         # Log CIs
         for k in ["mrr", "recall@1", "recall@5", "recall@10", "ndcg@10"]:
             ci_key = f"{k}_ci"
-            if ci_key in test_results and isinstance(test_results[ci_key], tuple):
-                ci_low, ci_high = test_results[ci_key]
+            if ci_key in val_results and isinstance(val_results[ci_key], tuple):
+                ci_low, ci_high = val_results[ci_key]
                 clean_k = k.replace("@", "_at_")
-                mlflow.log_metric(f"test_{clean_k}_ci_low", float(ci_low))
-                mlflow.log_metric(f"test_{clean_k}_ci_high", float(ci_high))
+                mlflow.log_metric(f"val_{clean_k}_ci_low", float(ci_low))
+                mlflow.log_metric(f"val_{clean_k}_ci_high", float(ci_high))
 
         # 8. Print Results Table
         table = Table(
@@ -379,10 +436,12 @@ def run_single_ablation(
         )
         table.add_column("Metric", style="dim", width=14)
         table.add_column("Score", justify="right", style="bold green", width=10)
-        table.add_column("95% Confidence Interval", justify="center", style="cyan", width=26)
+        table.add_column(
+            "95% Confidence Interval", justify="center", style="cyan", width=26
+        )
 
         for metric_name, score in scalar_metrics.items():
-            ci = test_results.get(f"{metric_name}_ci", ("—", "—"))
+            ci = val_results.get(f"{metric_name}_ci", ("—", "—"))
             ci_str = f"[{ci[0]:0.4f}, {ci[1]:0.4f}]" if isinstance(ci, tuple) else "—"
             table.add_row(metric_name.upper(), f"{score:0.4f}", ci_str)
 
@@ -403,8 +462,8 @@ def run_single_ablation(
 
 
 def main() -> None:
-    """CLI Entry point for Phase 6 ablation runner."""
-    parser = argparse.ArgumentParser(description="Run Phase 6 Ablation Studies")
+    """CLI Entry point for Phase 6 / Phase R4 ablation runner."""
+    parser = argparse.ArgumentParser(description="Run Phase R4 Ablation Studies")
     parser.add_argument(
         "--config",
         type=str,
@@ -422,7 +481,13 @@ def main() -> None:
         "--epochs",
         type=int,
         default=None,
-        help="Override epoch count (default: 1)",
+        help="Override epoch count (default: 2)",
+    )
+    parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=None,
+        help="Sample size for query evaluation (default: None, full validation split)",
     )
     parser.add_argument(
         "--smoke-test",
@@ -442,23 +507,32 @@ def main() -> None:
     if args.config:
         targets = [args.config]
     elif args.ablation == "all":
-        targets = list(ablation_config_map.values())
+        targets = [ablation_config_map["cls"], ablation_config_map["seq_128"]]
     elif args.ablation in ablation_config_map:
         targets = [ablation_config_map[args.ablation]]
     else:
-        console.print("[yellow]No config or ablation specified. Showing available ablations:[/yellow]")
+        console.print(
+            "[yellow]No config or ablation specified. Showing available ablations:[/yellow]"
+        )
         for name, path in ablation_config_map.items():
             console.print(f"  --ablation {name:<10} -> {path}")
         return
 
     summary_rows: list[dict[str, Any]] = []
     for cfg_path in targets:
-        result = run_single_ablation(cfg_path, epochs_override=args.epochs, smoke_test=args.smoke_test)
+        result = run_single_ablation(
+            cfg_path,
+            epochs_override=args.epochs,
+            smoke_test=args.smoke_test,
+            sample_size_override=args.sample_size,
+        )
         summary_rows.append(result)
 
     # Print comparative summary table if multiple ablations ran
     if len(summary_rows) > 1:
-        comp_table = Table(title="Phase 6 Ablations Comparative Summary", header_style="bold yellow")
+        comp_table = Table(
+            title="Phase R4 Ablations Comparative Summary", header_style="bold yellow"
+        )
         comp_table.add_column("Run Name", style="cyan")
         comp_table.add_column("Category", style="dim")
         comp_table.add_column("Variant", style="bold")
@@ -486,4 +560,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

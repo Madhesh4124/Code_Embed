@@ -1,5 +1,5 @@
-# Configuration for Phase 6: Ablation 4 — Sequence Length L = 128
-# Tests whether truncating sequences to 128 tokens retains >98% of MRR with 2x throughput
+# Configuration for Phase R4: Ablation 2 — Sequence Length L = 128
+# Tests whether truncating sequences to 128 tokens retains >98% of MRR with 2x throughput on clean data
 
 ablation:
   category: "seq_len"
@@ -18,9 +18,9 @@ model:
   num_modalities: 2
 
 data:
-  train_path: "data/processed/train.parquet"
-  val_path: "data/processed/validation.parquet"
-  test_path: "data/processed/test.parquet"
+  train_path: "data/processed_clean_v2/train.parquet"
+  val_path: "data/processed_clean_v2/validation.parquet"
+  test_path: "data/processed_clean_v2/test.parquet"
   tokenizer_path: "tokenizer/tokenizer.json"
   batch_size: 128
   max_seq_len: 128
@@ -28,12 +28,12 @@ data:
   pin_memory: true
 
 training:
-  lr: 3.0e-4
+  lr: 5.0e-4
   weight_decay: 0.01
   grad_clip: 1.0
-  temperature: 0.07
-  epochs: 1
-  warmup_steps: 500
+  temperature: 0.05
+  epochs: 2
+  warmup_ratio: 0.10
   log_every_steps: 50
   val_every_steps: 500
   seed: 42
@@ -41,6 +41,7 @@ training:
 checkpoint_dir: "checkpoints/ablation_seq_128"
 
 mlflow:
-  experiment_name: "codeembed-phase6-ablations"
-  run_name: "phase6_seq_len_128"
+  tracking_uri: "sqlite:///mlflow.db"
+  experiment_name: "codeembed-clean-ablations"
+  run_name: "ablation_seq_len_128"
 

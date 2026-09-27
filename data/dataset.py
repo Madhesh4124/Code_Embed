@@ -7,7 +7,11 @@ from torch.utils.data import DataLoader, Dataset
 
 from tokenizer.tokenizer import CodeEmbedTokenizer
 
-PROCESSED_DIR = Path("data/processed")
+DEFAULT_DATA_DIR = (
+    Path("data/processed_clean_v2")
+    if Path("data/processed_clean_v2").exists()
+    else Path("data/processed")
+)
 
 
 class CodeSearchDataset(Dataset):
@@ -25,16 +29,19 @@ class CodeSearchDataset(Dataset):
         use_pretokenized: bool = True,
         hard_negatives_file: str | Path | None = None,
         num_hard_negatives: int = 1,
+        data_dir: str | Path | None = None,
     ):
         path = Path(split_or_path)
         if path.suffix:
             self.parquet_path = path
             split_name = path.stem.replace("_tokenized", "")
+            base_dir = path.parent
         else:
             split_name = str(path)
-            self.parquet_path = PROCESSED_DIR / f"{split_name}.parquet"
+            base_dir = Path(data_dir) if data_dir is not None else DEFAULT_DATA_DIR
+            self.parquet_path = base_dir / f"{split_name}.parquet"
 
-        self.tokenized_path = PROCESSED_DIR / f"{split_name}_tokenized.pt"
+        self.tokenized_path = base_dir / f"{split_name}_tokenized.pt"
         self.is_pretokenized = use_pretokenized and self.tokenized_path.exists()
         self.num_hard_negatives = num_hard_negatives
 
@@ -42,7 +49,7 @@ class CodeSearchDataset(Dataset):
         if hard_negatives_file is not None:
             hn_path = Path(hard_negatives_file)
         else:
-            hn_path = PROCESSED_DIR / f"{split_name}_hard_negatives.pt"
+            hn_path = base_dir / f"{split_name}_hard_negatives.pt"
 
         if hn_path.exists():
             self.hard_neg_indices = torch.load(hn_path, mmap=True, weights_only=True)
@@ -91,7 +98,9 @@ class CodeSearchDataset(Dataset):
             }
             if self.hard_neg_indices is not None:
                 hn_idxs = self.hard_neg_indices[idx][: self.num_hard_negatives].tolist()
-                sample["hard_neg_codes"] = [self.df.iloc[hn_i]["code"] for hn_i in hn_idxs]
+                sample["hard_neg_codes"] = [
+                    self.df.iloc[hn_i]["code"] for hn_i in hn_idxs
+                ]
             return sample
 
 
@@ -120,8 +129,12 @@ class CodeSearchCollator:
 
             if "hard_neg_code_ids" in batch[0]:
                 # Shape: (B, K, L) -> stacked directly
-                batch_dict["hard_neg_code_ids"] = torch.stack([item["hard_neg_code_ids"] for item in batch])
-                batch_dict["hard_neg_code_mask"] = torch.stack([item["hard_neg_code_mask"] for item in batch])
+                batch_dict["hard_neg_code_ids"] = torch.stack(
+                    [item["hard_neg_code_ids"] for item in batch]
+                )
+                batch_dict["hard_neg_code_mask"] = torch.stack(
+                    [item["hard_neg_code_mask"] for item in batch]
+                )
 
             return batch_dict
 
@@ -163,14 +176,18 @@ class CodeSearchCollator:
                 modality="code",
             )
             k = len(batch[0]["hard_neg_codes"])
-            batch_dict["hard_neg_code_ids"] = hn_batch["input_ids"].view(len(batch), k, -1)
-            batch_dict["hard_neg_code_mask"] = hn_batch["attention_mask"].view(len(batch), k, -1)
+            batch_dict["hard_neg_code_ids"] = hn_batch["input_ids"].view(
+                len(batch), k, -1
+            )
+            batch_dict["hard_neg_code_mask"] = hn_batch["attention_mask"].view(
+                len(batch), k, -1
+            )
 
         return batch_dict
 
 
 def create_dataloader(
-    split: str = "train",
+    split: str | Path = "train",
     batch_size: int = 256,
     shuffle: bool = True,
     max_length: int = 256,
@@ -179,6 +196,7 @@ def create_dataloader(
     use_pretokenized: bool = True,
     hard_negatives_file: str | Path | None = None,
     num_hard_negatives: int = 1,
+    data_dir: str | Path | None = None,
 ) -> DataLoader:
     """Factory helper to build a ready-to-use DataLoader for a given split."""
     if tokenizer is None:
@@ -189,8 +207,12 @@ def create_dataloader(
         use_pretokenized=use_pretokenized,
         hard_negatives_file=hard_negatives_file,
         num_hard_negatives=num_hard_negatives,
+        data_dir=data_dir,
     )
     collator = CodeSearchCollator(tokenizer=tokenizer, max_length=max_length)
+
+    split_name = Path(split).stem.replace("_tokenized", "")
+    is_train = split_name == "train" and shuffle
 
     return DataLoader(
         dataset,
@@ -199,5 +221,5 @@ def create_dataloader(
         num_workers=num_workers,
         collate_fn=collator,
         pin_memory=torch.cuda.is_available(),
-        drop_last=(split == "train"),  # Drop incomplete last batch only in training
+        drop_last=is_train,  # Drop incomplete last batch only in training
     )

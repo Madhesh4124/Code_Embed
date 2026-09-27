@@ -5,7 +5,6 @@ objective used to align natural language text queries and code representations
 in a shared embedding space.
 """
 
-
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -31,19 +30,24 @@ class InfoNCELoss(nn.Module):
     def __init__(self, temperature: float = 0.07) -> None:
         super().__init__()
         if temperature <= 0.0:
-            raise ValueError(f"Temperature must be strictly positive, got {temperature}")
+            raise ValueError(
+                f"Temperature must be strictly positive, got {temperature}"
+            )
         self.temperature = temperature
 
     def forward(
         self,
         text_emb: torch.Tensor,
         code_emb: torch.Tensor,
+        mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Compute symmetric InfoNCE loss.
+        """Compute symmetric InfoNCE loss with optional false-negative masking.
 
         Args:
             text_emb: Normalized text embeddings of shape (B, D).
             code_emb: Normalized code embeddings of shape (B, D).
+            mask: Optional boolean mask of shape (B, B) where mask[i, j] is True
+                if query_i == query_j or code_i == code_j.
 
         Returns:
             Scalar loss tensor.
@@ -60,9 +64,19 @@ class InfoNCELoss(nn.Module):
         # 2. Ground truth targets: diagonal elements (0, 1, ..., B-1)
         targets = torch.arange(B, device=text_emb.device, dtype=torch.long)
 
-        # 3. Symmetric cross entropy
-        loss_t2c = F.cross_entropy(sim_matrix, targets)
-        loss_c2t = F.cross_entropy(sim_matrix.T, targets)
+        # 3. Apply false negative masking if provided
+        if mask is not None:
+            diag = torch.eye(B, device=text_emb.device, dtype=torch.bool)
+            false_neg_mask = mask & (~diag)
+            sim_t2c = sim_matrix.masked_fill(false_neg_mask, -1e4)
+            sim_c2t = sim_matrix.T.masked_fill(false_neg_mask.T, -1e4)
+        else:
+            sim_t2c = sim_matrix
+            sim_c2t = sim_matrix.T
+
+        # 4. Symmetric cross entropy
+        loss_t2c = F.cross_entropy(sim_t2c, targets)
+        loss_c2t = F.cross_entropy(sim_c2t, targets)
 
         return (loss_t2c + loss_c2t) / 2.0
 
@@ -112,7 +126,9 @@ class InfoNCEWithHardNegativesLoss(nn.Module):
     def __init__(self, temperature: float = 0.07) -> None:
         super().__init__()
         if temperature <= 0.0:
-            raise ValueError(f"Temperature must be strictly positive, got {temperature}")
+            raise ValueError(
+                f"Temperature must be strictly positive, got {temperature}"
+            )
         self.temperature = temperature
 
     def forward(
@@ -120,6 +136,7 @@ class InfoNCEWithHardNegativesLoss(nn.Module):
         text_emb: torch.Tensor,
         pos_code_emb: torch.Tensor,
         neg_code_emb: torch.Tensor | None = None,
+        mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute InfoNCE loss with in-batch and explicit hard negatives.
 
@@ -128,6 +145,8 @@ class InfoNCEWithHardNegativesLoss(nn.Module):
             pos_code_emb: Normalized positive code embeddings of shape (B, D).
             neg_code_emb: Optional normalized hard negative code embeddings of shape (B * K, D)
                 or (B, K, D). If None, falls back to standard in-batch InfoNCE.
+            mask: Optional boolean mask of shape (B, B) where mask[i, j] is True
+                if query_i == query_j or code_i == code_j.
 
         Returns:
             Scalar loss tensor.
@@ -141,11 +160,23 @@ class InfoNCEWithHardNegativesLoss(nn.Module):
         # 1. In-batch positive and negative similarities: (B, B)
         sim_pos = torch.matmul(text_emb, pos_code_emb.T) / self.temperature
 
+        # Apply false negative masking on in-batch matrix if provided
+        if mask is not None:
+            diag = torch.eye(B, device=text_emb.device, dtype=torch.bool)
+            false_neg_mask = mask & (~diag)
+            sim_pos_t2c = sim_pos.masked_fill(false_neg_mask, -1e4)
+            sim_pos_c2t = sim_pos.T.masked_fill(false_neg_mask.T, -1e4)
+        else:
+            sim_pos_t2c = sim_pos
+            sim_pos_c2t = sim_pos.T
+
+        # Ground truth targets: diagonal elements (0, 1, ..., B-1)
+        targets = torch.arange(B, device=text_emb.device, dtype=torch.long)
+
         # If no explicit hard negatives, standard symmetric InfoNCE
         if neg_code_emb is None or neg_code_emb.numel() == 0:
-            targets = torch.arange(B, device=text_emb.device, dtype=torch.long)
-            loss_t2c = F.cross_entropy(sim_pos, targets)
-            loss_c2t = F.cross_entropy(sim_pos.T, targets)
+            loss_t2c = F.cross_entropy(sim_pos_t2c, targets)
+            loss_c2t = F.cross_entropy(sim_pos_c2t, targets)
             return (loss_t2c + loss_c2t) / 2.0
 
         # Reshape neg_code_emb to 2D (total_negs, D) if passed as 3D (B, K, D)
@@ -156,14 +187,13 @@ class InfoNCEWithHardNegativesLoss(nn.Module):
         sim_neg = torch.matmul(text_emb, neg_code_emb.T) / self.temperature
 
         # 3. Concatenated candidate logits for text -> code: (B, B + total_negs)
-        sim_extended = torch.cat([sim_pos, sim_neg], dim=-1)
+        sim_extended = torch.cat([sim_pos_t2c, sim_neg], dim=-1)
 
         # 4. Target for query i is column i in the pos_code block
-        targets = torch.arange(B, device=text_emb.device, dtype=torch.long)
         loss_t2c = F.cross_entropy(sim_extended, targets)
 
         # 5. Symmetric code -> text component on the in-batch positive matrix
-        loss_c2t = F.cross_entropy(sim_pos.T, targets)
+        loss_c2t = F.cross_entropy(sim_pos_c2t, targets)
 
         return (loss_t2c + loss_c2t) / 2.0
 
@@ -193,5 +223,3 @@ class InfoNCEWithHardNegativesLoss(nn.Module):
         t2c_acc = float((t2c_preds == targets).float().mean().item())
         c2t_acc = float((c2t_preds == targets).float().mean().item())
         return t2c_acc, c2t_acc
-
-

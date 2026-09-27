@@ -1,5 +1,9 @@
 # CodeEmbed — Comprehensive Study & Revision Guide
 
+> [!CAUTION]
+> **INVALID: computed on leaky data, superseded by R-track.**
+> All empirical metrics, RQ conclusions, and interview claims in Sections 11–13 were derived from code containing unstripped docstring substrings (100% label leakage). The mathematical formulations, tensor shapes, and engineering bug fixes (SDPA tiling, CSR sparse BLAS, pre-tokenization) remain structurally accurate, but all scientific numbers and conclusions are superseded by the clean R-track.
+
 > **Purpose**: A step-by-step companion guide explaining the *what*, *why*, and *how* behind every script, architectural decision, formula, and bug fix in this project. Use this for revision, deep understanding, and interview/portfolio preparation.
 
 ---
@@ -578,7 +582,7 @@ Given a batch of $B = 128$ normalized query vectors $\mathbf{Z}_{\text{text}} \i
 In Phase 2, our Basic Transformer Encoder was trained with a single set of weights to encode both natural language docstrings and Python code without any structural indication of which modality it was reading.
 * **The Failure Mode**:
   Natural language and Python code have radically different token distributions, syntactic rules, and semantic conventions. Without an explicit modality signal, self-attention attempted to treat docstring tokens and code tokens as occupying the exact same syntactic space.
-* **Empirical Result**: The Basic Encoder achieved an MRR of only **0.4633** (Recall@1 = 0.4100). The model suffered from representation confusion.
+* **Empirical Result**: The historical Basic Encoder achieved an MRR of **0.4633** (Recall@1 = 0.4100) on leaky data. Under the clean, leak-free R-Track ([Phase R2-A](walkthrough.md#04-phase-r2-a-model-1--basic-encoder-completed)), the genuine performance is **0.3714 Val MRR** (Recall@1 = 0.2820). In both regimes, the model suffered from representation confusion without modality distinction.
 
 ### 9.2 The Mathematical Mechanism of Learned Modality Embeddings
 In Phase 3, we solved this without duplicating the 7.38M parameter Transformer. We added a tiny lookup table $\mathbf{E}_{\text{modality}} \in \mathbb{R}^{2 \times d_{\text{model}}}$ ($2 \times 256 = 512$ parameters):
@@ -672,13 +676,40 @@ During early training runs with `data/dataset.py`, 50 steps took ~5 minutes. An 
 
 ## 11. Cross-Architecture Benchmark & Research Insights (RQ1–RQ3)
 
-### 11.1 Full Benchmark Comparison Table
+### 11.0 R-Track Clean Benchmark Suite (Protocol v1.1 Remediation: `data/processed_clean_v2/`)
 
-All neural models were trained on CodeSearchNet Python using symmetric InfoNCE contrastive loss with in-batch negatives ($\tau = 0.07$, AdamW, cosine annealing with warmup) and evaluated on 1,000 sampled test queries against the full 21,005 test code corpus with 1,000 bootstrap resamples:
+All docstrings have been removed from the code documents via coordinate AST byte slicing to eliminate 100% label leakage. Cross-split MinHash LSH deduplication ($J \ge 0.85$) purges near-duplicate contamination. Evaluation uses exact generalized harmonic expected reciprocal rank ($\mathbb{E}[\text{RR}]$) tie-breaking:
+
+| Phase | Model | Architecture / Modality | Parameters | Epochs | Corpus Size | Eval Queries | MRR | 95% Confidence Interval | Recall@1 | Recall@5 | Recall@10 | NDCG@10 |
+|:---:|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Phase R1** | **BM25 Baseline** | ATIRE Lexical Floor | 0 | 0 (Lexical) | 20,115 | Validation (20,115) | **0.5214** | [0.5152, 0.5275] | **0.4107** | **0.6515** | **0.7192** | **0.5644** |
+| **Phase R1 (Test)** | **BM25 Baseline** | ATIRE Lexical Floor | 0 | 0 (Lexical) | 19,632 | Test (19,632) | **0.5108** | [0.5047, 0.5166] | **0.4052** | **0.6340** | **0.6993** | **0.5514** |
+| **Phase R2-A** | **Basic Encoder** | Pre-LN (0 modality) | 7.38M | 2 | 20,115 | Validation (1,000) | **0.3714** | [0.3469, 0.3976] | **0.2820** | **0.4630** | **0.5430** | **0.4042** |
+| **Phase R2-B (Pilot Initial)** | **Shared Encoder** | Pre-LN + Modality (LR=3e-4, τ=0.07) | 7.38M | 2 | 20,115 | Validation (20,115) | **0.3423** | [0.3366, 0.3480] | **0.2500** | **0.4425** | **0.5194** | **0.3768** |
+| **Phase R2-B (Fallback Winner)** | **Shared Encoder** | Pre-LN + Modality (LR=5e-4, τ=0.05) | 7.38M | 2 | 20,115 | Validation (20,115) | **0.4033** | — | **0.3038** | **0.5118** | **0.5914** | — |
+
+> [!NOTE]
+> **Scientific Finding on Phase R2-B & Pre-Registered Fallback Tuning Grid**:
+> - **Initial Pilot ($3\text{e-}4, \tau=0.07$)**: Scored 0.3423 Val MRR, narrowly missing the pre-registered Pilot Gate ($0.3910$).
+> - **Fallback Grid Leaderboard (6 Runs)**: We executed the full pre-registered grid across $\text{LR} \in \{1\text{e-}4, 3\text{e-}4, 5\text{e-}4\}$ and $\tau \in \{0.05, 0.07\}$.
+>   1. `lr_5e-4_tau_0.05`: **Val MRR = 0.4033**, Low-Overlap = **0.2931** (Rank 1 — **PASSES BOTH GATES**)
+>   2. `lr_5e-4_tau_0.07`: **Val MRR = 0.3832**, Low-Overlap = 0.2777
+>   3. `lr_3e-4_tau_0.05`: **Val MRR = 0.3627**, Low-Overlap = 0.2546
+>   4. `lr_3e-4_tau_0.07`: **Val MRR = 0.3423**, Low-Overlap = 0.2433
+>   5. `lr_1e-4_tau_0.05`: **Val MRR = 0.2435**, Low-Overlap = 0.1542
+>   6. `lr_1e-4_tau_0.07`: **Val MRR = 0.2307**, Low-Overlap = 0.1486
+> - **The Cold-Start Learning Rate Effect**: Compact from-scratch Transformers require a slightly higher learning rate ($5\text{e-}4$) with 10% warmup to reorganize initial random embeddings (+6.1 MRR points over $3\text{e-}4$).
+> - **The Sharp Temperature Effect**: $\tau = 0.05$ ($20\times$ scaling) consistently beats $\tau = 0.07$ by +1.3 to +2.0 MRR points across all learning rates by sharpening gradient penalties against in-batch false negatives.
+> - **The Modality Gap Mechanism**: When controlled at the same learning rate ($3\text{e-}4$), adding modality vectors causes a net drop of $-0.0321$ MRR on queries with lexical overlap due to the static subspace offset, but doubles performance (+0.0423 MRR) on the zero-overlap slice.
+> - **Pilot Gate Outcome**: **OFFICIALLY PASSED**. `lr_5e-4_tau_0.05` achieves **0.4033 Val MRR** ($\ge 0.3910$) and **0.2931 Low-Overlap MRR** ($> 0.2489$). Standard recipe frozen at $(\text{LR}=5\text{e-}4, \tau=0.05)$.
+
+### 11.1 Historical Leaky Benchmark Comparison Table (Invalidated — Superseded by R-Track)
+
+All historical neural models below were trained on unstripped CodeSearchNet Python where 100% of docstrings were duplicated verbatim inside the code body:
 
 | Phase | Model | Architecture | Parameters | Epochs | Test MRR | Test Recall@1 | Test Recall@5 | Test Recall@10 | Test NDCG@10 |
 |:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Phase 1** | **BM25 Baseline** | Lexical Okapi (sub-tokens) | 0 | 0 (Lexical) | **0.9498** | **0.9180** | **0.9890** | **0.9950** | **0.9610** |
+| **Phase 1** | **BM25 Baseline** | Lexical Okapi (sub-tokens) | 0 | 0 (Lexical) | *0.9498* | *0.9180* | *0.9890* | *0.9950* | *0.9610* |
 | **Phase 2** | **Basic Encoder** | 4-layer Shared (no modality) | 7.38M | <1 (Smoke) | **0.4633** | **0.4100** | **0.5400** | **0.5500** | **0.4806** |
 | **Phase 3** | **Shared Encoder** | 4-layer Shared + Modality Table | 7.38M | 1 | **0.9296** | **0.8880** | **0.9780** | **0.9840** | **0.9429** |
 | **Phase 4** | **Dual Encoder** | Decoupled (3-layer code + 3-layer text) | 13.19M | 2 | **0.8670** | **0.8050** | **0.9450** | **0.9620** | **0.8893** |
@@ -843,14 +874,67 @@ At $L = 256$, $L^2 = 65,536$. At $L = 128$, $L^2 = 16,384$ (**$75\%$ reduction i
 
 ### 13.4 New Portfolio & Interview Questions from Phase 6
 
-1. **Q: Why does CLS token pooling underperform Masked Mean Pooling in from-scratch Transformer encoders?**
-   * *A*: In models trained from scratch without massive masked-language-model pretraining (like BERT), the self-attention layers have not learned the complex global routing required to compress an entire sentence or AST into a single summary token (`[CLS]`). Furthermore, masked mean pooling provides an explicit gradient highway to every token representation ($\frac{1}{N} \nabla$), whereas CLS pooling creates an information bottleneck that starves downstream tokens from direct contrastive supervision. In our benchmarks, mean pooling beat CLS pooling by +4.6 MRR points (0.9296 vs 0.8836).
+---
 
-2. **Q: How does the temperature parameter $\tau$ in InfoNCE loss influence representation learning?**
-   * *A*: Temperature acts as a hardness amplifier. Small $\tau$ (e.g. 0.05) multiplies cosine similarities by 20x, making the softmax distribution peaky and magnifying gradients against the closest negatives; however, if $\tau$ is too small, it penalizes valid synonyms and soft negatives, destabilizing training. Large $\tau$ (e.g. 0.10) diffuses the distribution and dilutes gradients against deceptive hard negatives. Our ablation study proved that $\tau = 0.07$ achieves the optimal balance on CodeSearchNet.
+## 14. R-Track Scientific Remediation & Integrity Audit Deep Dive
 
-3. **Q: In an engineering deployment, how would you use ablation studies to optimize serving latency?**
-   * *A*: By conducting an input sequence length ablation ($L=256$ vs $L=128$), we proved that truncating sequences to 128 tokens retains 99.9% of retrieval quality (MRR 0.9292 vs 0.9296) while cutting attention matrix operations by 75% and doubling batch inference throughput. In production, we deploy $L=128$, cutting hardware hosting costs in half without any perceptible loss in search accuracy for users.
+Following the discovery of 100% docstring query leakage in historical data, all scientific metrics were reset. Below are the key mathematical, statistical, and engineering lessons from the remediation and integrity verification battery.
 
+---
 
+### 14.1 Exact Nearest-Neighbor Search vs. LSH Candidate Sampling
 
+When verifying cross-split deduplication, checking Jaccard similarity *only over MinHash LSH candidate buckets* creates a severe sampling bias: if the LSH hash tables yield no candidate collision for a document, its reported nearest-neighbor similarity trivially appears as $0.0000$.
+
+#### The Inverted-Index Solution:
+To determine the true distribution of nearest-neighbor similarities across the full 360,957 training functions without evaluating $500 \times 360,957 \approx 1.8 \times 10^8$ full pairwise comparisons:
+1. **Query Shingle Inversion**: Let $Q = \bigcup_{i=1}^{500} \text{shingles}(v_i)$ be the set of word 3-gram hashes appearing in the 500 validation samples (~29,630 unique hashes).
+2. **Streaming Intersection**: Stream the 360,957 training functions. For each train document $d$, compute its 3-gram shingle set and find its intersection with $Q$. For any matching shingle, accumulate the intersection count $|v_i \cap d|$.
+3. **Exact Jaccard Calculation**:
+   $$J(v_i, d) = \frac{|v_i \cap d|}{|v_i| + |d| - |v_i \cap d|}$$
+   Train functions sharing 0 shingles with $v_i$ have $J(v_i, d) = 0.0$ by definition.
+
+#### Empirical Verification Findings:
+- Natural Python syntax sharing (e.g. `def __init__(self, ...):`, `import os, sys`, `return None`) results in a realistic median nearest-neighbor Jaccard of **0.0314** (test) / **0.0303** (val) and mean of **0.0524** (test) / **0.0447** (val).
+- **Test Split Exact Nearest-Neighbor Search ($N=500$ vs $360,957$ Train)**:
+  - Max observed $J = 0.8462 < 0.8500$.
+  - **0 out of 500 test functions** exhibited $J \ge 0.85$ (0.00%).
+  - **Statistical Bound**: By the rule of three ($-\ln(0.05)/N = 3/500 = 0.006$), 0/500 bounds the true cross-split near-duplicate rate at $\le \mathbf{0.60\%}$ at the 95% confidence level ($p=0.05$).
+
+---
+
+### 14.2 BM25 IDF Formulations: Robertson Smooth vs. ATIRE Floor
+
+A key Information Retrieval nuance uncovered during benchmark parity testing is how different BM25 implementations handle high-frequency terms where document frequency $n > N / 2$:
+
+1. **Standard Sparck Jones / Okapi IDF**:
+   $$\text{IDF}(t) = \ln\left(\frac{N - n + 0.5}{n + 0.5}\right)$$
+   When a term appears in more than half the corpus ($n > N/2$), $\frac{N - n + 0.5}{n + 0.5} < 1$, causing $\text{IDF}(t) < 0$. Under naive scoring, containing a common programming keyword (like `self` or `def`) would penalize a document!
+
+2. **ATIRE Variant (`rank_bm25.BM25Okapi`)**:
+   Sets a piecewise floor on negative IDFs based on the average IDF across the vocabulary:
+   $$\text{IDF}_{\text{ATIRE}}(t) = \begin{cases} \ln\left(\frac{N - n + 0.5}{n + 0.5}\right) & \text{if } n \le N/2 \\ \epsilon \cdot \overline{\text{IDF}} & \text{if } n > N/2 \quad (\epsilon = 0.25) \end{cases}$$
+
+3. **Robertson / Lucene / BM25+ Smooth Formulation (`PROTOCOL.md`)**:
+   Adds $+1.0$ inside the natural logarithm:
+   $$\text{IDF}_{\text{Robertson}}(t) = \ln\left(1 + \frac{N - n + 0.5}{n + 0.5}\right)$$
+   This guarantees that $\text{IDF}(t) > 0$ for all frequencies without arbitrary piecewise thresholds.
+
+#### Impact on Full-Corpus Retrieval & Baseline Adoption:
+Across 19,632 test documents on 2,000 queries:
+- ATIRE (`rank_bm25`): **MRR = 0.5115**
+- Robertson Smooth (Custom): **MRR = 0.5005**
+- **Decision**: On the full validation set ($N=20,115$), ATIRE scored **0.5214 MRR** vs Robertson's **0.5120 MRR** ($\Delta = +0.0094$). To avoid claiming an artificial or cheap neural victory over a sub-optimal lexical baseline, the conservative choice is to adopt the stronger baseline. ATIRE floor was formally selected and logged in [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) §1.10.
+- When both are configured with identical IDF, the mean score difference is **$3.19 \times 10^{-5}$** and MRR matches to **0.0000** (machine precision).
+
+---
+
+### 14.3 Within-Split Duplicate Queries & In-Batch Masking
+
+While within-split duplicate code is strictly 0.00% across all splits, **4.59% of training queries (16,552 queries)** appear more than once with different code implementations (e.g., multiple repositories writing a utility function with docstring `"Get the current timestamp in UTC"`).
+
+#### Why In-Batch False Negative Masking is Critical:
+In InfoNCE contrastive training with batch size $B=128$:
+$$\mathcal{L}_i = -\log \frac{\exp(\mathbf{z}_{q_i}^\top \mathbf{z}_{c_i} / \tau)}{\sum_{j=1}^B \exp(\mathbf{z}_{q_i}^\top \mathbf{z}_{c_j} / \tau)}$$
+If document $c_j$ ($j \ne i$) was written for the identical docstring query ($q_j == q_i$), treating $c_j$ as a negative forces the model to push away a valid, semantically equivalent implementation!
+- **Hygiene Rule**: In-batch ground truth mask $M_{i,j} = \mathbb{I}(q_i == q_j)$ masks out identical-query pairs from the contrastive denominator.

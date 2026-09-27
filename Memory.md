@@ -1,6 +1,17 @@
 # CodeEmbed — Project Memory
 
+> [!CAUTION]
+> **INVALID: computed on leaky data, superseded by R-track.**
+> Phases 1–6 were computed on unstripped CodeSearchNet data with 100% docstring-in-code label leakage. All historical benchmarks and conclusions below are marked invalid and superseded by the leak-free R-track (Phases R0–R4).
+
 > **Purpose**: Track what's built, what's working, what's implemented. Update after each milestone.
+>
+> 🚀 **Active Track: R-Track (Scientific Remediation)**
+> - Primary Source of Truth: [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md)
+> - Frozen Research Protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`)
+> - Protocol Errata & Deviations: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
+> - Active Branch: `r-phase`
+> - Current Milestone: **Phase R2-A (Basic)**, **Phase R2-B (Shared)**, **Phase R2-C (Mining)**, and **Phase R2-D (Hard Negative Retraining)** COMPLETE. Hard-Negative Shared Encoder achieves Full Val MRR **0.4074** (Low-Overlap: **0.3047** vs BM25 0.2489), 1k Sample MRR **0.4116**. Next: Phase R4 (Architecture & Hyperparameter Ablations).
 
 ---
 
@@ -8,19 +19,14 @@
 
 | Component | Status | Last Updated | Notes |
 |-----------|--------|--------------|-------|
-| Project Setup | 🟢 Completed | 2026-09-07 | Folder tree, .gitignore, requirements.txt, and local .venv with uv & CUDA 12.4 |
-| Data Pipeline | 🟢 Completed | 2026-09-08 | 385k samples preprocessed, Dataset & Collator verified with DataLoader |
-| Tokenizer | 🟢 Completed | 2026-09-08 | 16k BPE trained on code+text; CodeEmbedTokenizer wrapper tested & verified |
-| BM25 Baseline | 🟢 Completed | 2026-09-12 | Vectorized inverted index; MRR 0.9498, R@1 0.9180, R@10 0.9950; logged to MLflow |
-| Basic Encoder | 🟢 Built & Verified | 2026-09-12 | 7.38M Pre-LN Transformer from scratch; InfoNCE loss; CUDA mixed precision training loop; 45/45 tests passing |
-| Shared Encoder | 🟢 Completed | 2026-09-13 | 7.38M Transformer + Modality embeddings; Test MRR 0.9296, R@1 0.8880, R@10 0.9840; 50/50 tests passing |
-| Dual Encoder | 🟢 Completed | 2026-09-19 | Decoupled 3-layer code & text BaseEncoders (~13.19M params); Test MRR 0.8670, R@1 0.8050, R@10 0.9620; 55/55 tests passing |
-| Hard Negatives | 🟢 Completed | 2026-09-19 | Mined 385k queries via SciPy CSR BM25; trained Shared Encoder with hard negatives (2 epochs, 0.35s/step); Test MRR 0.9383, R@1 0.9030, R@10 0.9880 (+1.5% R@1 boost); 60/60 tests passing |
-| Ablations | 🟢 Completed | 2026-09-20 | 4 controlled runs in MLflow; MaskedMeanPooling beats CLS by +4.6 MRR points; tau=0.07 optimal; L=128 yields 2x speedup with zero quality loss; 67/67 tests passing |
-| Scaling & Capacity | ⬜ Not Started | — | Phase 6.5 (~4.2M to ~54M parameter exploration within 6 GB GPU) |
-| Pretrained Baseline | ⬜ Not Started | — | Phase 7 |
-| Demo | ⬜ Not Started | — | Phase 8 |
-| Documentation | 🟢 Active | 2026-09-20 | AGENTS.md, Memory.md, STUDY_GUIDE.md, and walkthrough.md actively maintained |
+| Phase R0: Clean Data Preprocessing | 🟢 Completed | 2026-09-20 | AST byte-sliced docstrings; MinHash LSH cross-split dedup; clean Parquet + `.pt` tokenized in `data/processed_clean_v2/` |
+| Phase R1: Clean BM25 Lexical Baseline | 🟢 Completed | 2026-09-20 | ATIRE variant: Full test (19,632 queries) MRR **0.5108** [0.5047, 0.5166]; Val MRR **0.5214** [0.5152, 0.5275]; logged to MLflow |
+| Phase R2-A: Model 1 — Basic Encoder | 🟢 Completed | 2026-09-23 | 2 epochs on clean data: Val MRR **0.3714** [0.3469, 0.3976], R@1 **0.2820**, R@10 **0.5430**; BaseEncoder (~7.38M, 0 modality); MLflow Run `8cc3cb36b0494d42be6bf7253c3ab2e1` |
+| Phase R2-B: Model 2 — Shared Encoder | 🟢 Completed | 2026-09-24 | Pilot initial: 0.3423; Fallback Grid complete (6 runs). Winner `lr_5e-4_tau_0.05` achieves Full Val MRR **0.4033** (Low-Overlap: **0.2931**), PASSING both Pilot Gate criteria! |
+| Phase R2-C: BM25 Hard Negative Mining | 🟢 Completed | 2026-09-24 | 360,957 clean train queries mined in 130.2s (2,773 q/s); 3-tier filters purged 18,594 false negatives (12,448 docstring + 5,589 AST skeleton + 557 MinHash); output matrix (360957, 7) saved to `data/processed_clean_v2/train_hard_negatives.pt` |
+| Phase R2-D: Hard Negative Shared Encoder | 🟢 Completed | 2026-09-25 | 2 epochs from scratch (7 in-batch + 1 hard negative): Full Val MRR **0.4074** (Low-Overlap: **0.3047** vs BM25 0.2489), 1k Sample MRR **0.4116** [0.3843, 0.4390], R@1 **0.3130**, R@10 **0.6060**; MLflow Run `c4e2e5c02be74bf19eacf4ea4fc68c5c` |
+| Phase R4: Ablations (Pool/Temp/SeqLen) | ⬜ Next Action | 2026-09-25 | Pre-registered ablations on clean data: Pooling (MaskedMean vs CLS), Temperature (0.05, 0.07, 0.10), Sequence Length (128 vs 256) |
+| Dual Encoder (Teammate Track) | 📋 Delegated | 2026-09-20 | Model 3 handover config `configs/dual_clean.yaml` ready for independent execution by teammate (RQ1) |
 
 ---
 
@@ -106,7 +112,18 @@
 |:---:|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---|
 | **Phase 1** | `234f518410034b628b9c90eb7cbbc1cf` | BM25 | k1=1.5, b=0.75 | 0 (Lexical) | 0.9498 | 0.9180 | 0.9890 | 0.9950 | 0.9610 | Lexical benchmark on 1k test queries vs 21,005 corpus (logged to mlruns) |
 
-### Architecture Experiments
+### R-Track Experiments (Clean & Leak-Free Data: `data/processed_clean_v2/`)
+| Phase | Run ID | Model | Params | Modality Emb | Negatives | Epochs | Val MRR [95% CI] | Val R@1 | Val R@5 | Val R@10 | Val NDCG@10 | Status |
+|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Phase R1** | `14feca9d5b024faab9da64beac12541b` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5214 [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | 🟢 Completed (Full Val) |
+| **Phase R1 (Test)** | `fb3b5313f1bb419bb330b7fc0dee6bf5` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5108 [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | 🟢 Completed (Full Test) |
+| **Phase R2-B (Pilot Initial)** | `3e1ae6f598c1428a9eafb016edbb7592` | SharedEncoder (LR=3e-4, τ=0.07) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.3423** [0.3366, 0.3480] | 0.2500 | 0.4425 | 0.5194 | 0.3768 | 🟢 Completed (Full Val) |
+| **Phase R2-B (Fallback Winner)** | `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt` | SharedEncoder (LR=5e-4, τ=0.05) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.4033** [0.3973, 0.4093] | **0.3038** | **0.5118** | **0.5914** | **0.4412** | 🟢 **PASS (Gate >= 0.3910)** |
+| **Phase R2-D** | `c4e2e5c02be74bf19eacf4ea4fc68c5c` | SharedEncoder (Hard Negatives) | 7.38M | Learned (2x256) | 1 BM25 Hard + In-batch | 2 | **0.4074** [0.4015, 0.4135] | **0.3091** | **0.5166** | **0.5976** | **0.4458** | 🟢 **PASS (+0.41 MRR pts, +1.16 Low)** |
+| **Phase R4 (Ablation 1)** | `1dd691e839ee4684b17d990b51cde549` | AblationShared (CLSPooling) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.1566** [0.1524, 0.1605] | **0.0957** | **0.2120** | **0.2751** | **0.1762** | 🟢 Completed (-0.2467 vs Mean) |
+| **Phase R4 (Ablation 2)** | `ef009dd84a66465a92847ab378b0bdea` | AblationShared (SeqLen L=128) | 7.35M | Learned (2x256) | In-batch (masked) | 2 | **0.3943** [0.3886, 0.4002] | **0.2965** | **0.4998** | **0.5801** | **0.4314** | 🟢 Completed (97.8% retention, 1.8x speedup) |
+
+### Historical Leaky Architecture Experiments (Superseded)
 | Phase | Run ID | Model | Params | Tokenizer | Negatives | Epochs | MRR | R@1 | R@5 | R@10 | Status |
 |:---:|:---|:---|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---|
 | **Phase 2** | — | Basic | 7.38M | Custom BPE | In-batch | <1 (Smoke) | 0.4633 | 0.3540 | 0.5890 | 0.6790 | Baseline |

@@ -66,3 +66,24 @@ class TestInfoNCELoss:
         assert not torch.isnan(text_emb.grad).any()
         assert not torch.isnan(code_emb.grad).any()
 
+    def test_false_negative_masking(self):
+        """Verify that duplicate in-batch pairs are masked out of the contrastive denominator."""
+        loss_fn = InfoNCELoss(temperature=0.07)
+        # 3 samples, where sample 0 and 1 are identical duplicates
+        text_emb = torch.tensor([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=torch.float32)
+        code_emb = torch.tensor([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=torch.float32)
+
+        # Mask indicating item 0 and item 1 share identical queries/codes
+        mask = torch.tensor(
+            [[True, True, False], [True, True, False], [False, False, True]],
+            dtype=torch.bool,
+        )
+
+        loss_unmasked = loss_fn(text_emb, code_emb)
+        loss_masked = loss_fn(text_emb, code_emb, mask=mask)
+
+        # Unmasked loss penalizes pair (0, 1) and (1, 0) as hard negatives even though they are identical
+        # Masked loss excludes them from the denominator, resulting in lower loss
+        assert loss_masked.item() < loss_unmasked.item()
+        assert not torch.isnan(loss_masked)
+

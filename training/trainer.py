@@ -142,7 +142,15 @@ class ContrastiveTrainer:
 
         # Compute total training steps
         steps_per_epoch = len(self.train_loader)
-        self.total_training_steps = min(self.max_steps, self.max_epochs * steps_per_epoch)
+        self.total_training_steps = min(
+            self.max_steps, self.max_epochs * steps_per_epoch
+        )
+        if "warmup_ratio" in t_cfg:
+            self.warmup_steps = max(
+                1, int(float(t_cfg["warmup_ratio"]) * self.total_training_steps)
+            )
+        else:
+            self.warmup_steps = int(t_cfg.get("warmup_steps", 1000))
         self.scheduler = get_cosine_schedule_with_warmup(
             self.optimizer,
             num_warmup_steps=self.warmup_steps,
@@ -169,21 +177,31 @@ class ContrastiveTrainer:
         if isinstance(self.model, DualEncoder):
             code_emb = self.model.encode_code(code_ids, attention_mask=code_mask)
             text_emb = self.model.encode_text(text_ids, attention_mask=text_mask)
-        elif isinstance(self.model, SharedEncoder) or hasattr(self.model, "num_modalities"):
-            code_emb = self.model(code_ids, attention_mask=code_mask, modality_ids="code")
-            text_emb = self.model(text_ids, attention_mask=text_mask, modality_ids="text")
+        elif isinstance(self.model, SharedEncoder) or hasattr(
+            self.model, "num_modalities"
+        ):
+            code_emb = self.model(
+                code_ids, attention_mask=code_mask, modality_ids="code"
+            )
+            text_emb = self.model(
+                text_ids, attention_mask=text_mask, modality_ids="text"
+            )
         else:
             code_emb = self.model(code_ids, attention_mask=code_mask)
             text_emb = self.model(text_ids, attention_mask=text_mask)
         return code_emb, text_emb
 
-    def _encode_code_only(self, code_ids: torch.Tensor, code_mask: torch.Tensor) -> torch.Tensor:
+    def _encode_code_only(
+        self, code_ids: torch.Tensor, code_mask: torch.Tensor
+    ) -> torch.Tensor:
         """Encode code representations only."""
         from model.dual_encoder import DualEncoder
 
         if isinstance(self.model, DualEncoder):
             return self.model.encode_code(code_ids, attention_mask=code_mask)
-        elif isinstance(self.model, SharedEncoder) or hasattr(self.model, "num_modalities"):
+        elif isinstance(self.model, SharedEncoder) or hasattr(
+            self.model, "num_modalities"
+        ):
             return self.model(code_ids, attention_mask=code_mask, modality_ids="code")
         else:
             return self.model(code_ids, attention_mask=code_mask)
@@ -208,8 +226,15 @@ class ContrastiveTrainer:
 
         has_hard_negs = "hard_neg_code_ids" in batch
 
+        # Protocol v1.1 §2.3: In-batch false negative mask M_{i,j} = (query_i == query_j or code_i == code_j)
+        query_match = (text_ids.unsqueeze(1) == text_ids.unsqueeze(0)).all(dim=-1)
+        code_match = (code_ids.unsqueeze(1) == code_ids.unsqueeze(0)).all(dim=-1)
+        in_batch_mask = query_match | code_match
+
         with torch.amp.autocast(device_type=self.device.type, enabled=self.use_amp):
-            code_emb, text_emb = self._encode_pair(code_ids, code_mask, text_ids, text_mask)
+            code_emb, text_emb = self._encode_pair(
+                code_ids, code_mask, text_ids, text_mask
+            )
 
             if has_hard_negs:
                 hn_ids = batch["hard_neg_code_ids"].to(self.device, non_blocking=True)
@@ -219,10 +244,12 @@ class ContrastiveTrainer:
                 hn_ids_flat = hn_ids.view(B * K, L)
                 hn_mask_flat = hn_mask.view(B * K, L)
                 hn_emb = self._encode_code_only(hn_ids_flat, hn_mask_flat)
-                loss = self.criterion(text_emb, code_emb, hn_emb)
+                loss = self.criterion(
+                    text_emb, code_emb, hn_emb, mask=in_batch_mask
+                )
             else:
                 hn_emb = None
-                loss = self.criterion(text_emb, code_emb)
+                loss = self.criterion(text_emb, code_emb, mask=in_batch_mask)
 
         # Backward pass with scaled gradients
         self.scaler.scale(loss).backward()
@@ -238,7 +265,9 @@ class ContrastiveTrainer:
 
         # Accuracy computation
         t2c_acc, c2t_acc = self.criterion.compute_accuracy(
-            text_emb.detach(), code_emb.detach(), hn_emb.detach() if hn_emb is not None else None
+            text_emb.detach(),
+            code_emb.detach(),
+            hn_emb.detach() if hn_emb is not None else None,
         )
 
         return float(loss.item()), t2c_acc, c2t_acc
@@ -272,9 +301,10 @@ class ContrastiveTrainer:
             text_mask = batch["text_mask"].to(self.device, non_blocking=True)
 
             with torch.amp.autocast(device_type=self.device.type, enabled=self.use_amp):
-                code_emb, text_emb = self._encode_pair(code_ids, code_mask, text_ids, text_mask)
+                code_emb, text_emb = self._encode_pair(
+                    code_ids, code_mask, text_ids, text_mask
+                )
                 loss = self.criterion(text_emb, code_emb)
-
 
             total_loss += float(loss.item())
 
@@ -318,14 +348,20 @@ class ContrastiveTrainer:
 
     def train(self) -> dict[str, float]:
         """Execute full training loop across configured epochs / steps."""
-        self.console.print(f"[bold green]Starting Training on {self.device.type.upper()}[/bold green]")
+        self.console.print(
+            f"[bold green]Starting Training on {self.device.type.upper()}[/bold green]"
+        )
         total_params, trainable_params = self.model.get_num_params()
-        self.console.print(f"Model Parameters: {trainable_params:,} trainable / {total_params:,} total (~{total_params / 1e6:0.2f}M)")
+        self.console.print(
+            f"Model Parameters: {trainable_params:,} trainable / {total_params:,} total (~{total_params / 1e6:0.2f}M)"
+        )
 
         start_time = time.time()
 
         for epoch in range(1, self.max_epochs + 1):
-            self.console.print(f"\n[bold cyan]Epoch {epoch}/{self.max_epochs}[/bold cyan]")
+            self.console.print(
+                f"\n[bold cyan]Epoch {epoch}/{self.max_epochs}[/bold cyan]"
+            )
             epoch_loss = 0.0
             epoch_steps = 0
 
@@ -337,7 +373,9 @@ class ContrastiveTrainer:
                 TimeElapsedColumn(),
                 console=self.console,
             ) as progress:
-                task = progress.add_task(f"Training Epoch {epoch}", total=len(self.train_loader))
+                task = progress.add_task(
+                    f"Training Epoch {epoch}", total=len(self.train_loader)
+                )
 
                 for batch in self.train_loader:
                     self.global_step += 1
@@ -375,18 +413,23 @@ class ContrastiveTrainer:
                         if val_mrr > self.best_val_score:
                             self.best_val_score = val_mrr
                             self.save_checkpoint(
-                                self.checkpoint_dir / f"checkpoint_step_{self.global_step}.pt",
+                                self.checkpoint_dir
+                                / f"checkpoint_step_{self.global_step}.pt",
                                 epoch=epoch,
                                 is_best=True,
                             )
-                            self.console.print(f" [bold green][OK] New best val MRR: {val_mrr:0.4f} saved[/bold green]")
+                            self.console.print(
+                                f" [bold green][OK] New best val MRR: {val_mrr:0.4f} saved[/bold green]"
+                            )
 
                     if self.global_step >= self.max_steps:
                         break
 
             # Epoch end validation
             avg_epoch_loss = epoch_loss / max(epoch_steps, 1)
-            self.console.print(f"Epoch {epoch} finished — Avg Loss: {avg_epoch_loss:0.4f}")
+            self.console.print(
+                f"Epoch {epoch} finished — Avg Loss: {avg_epoch_loss:0.4f}"
+            )
 
             if self.val_loader:
                 val_metrics = self.evaluate(max_val_batches=None)  # full validation
@@ -397,7 +440,9 @@ class ContrastiveTrainer:
                 is_best = val_mrr > self.best_val_score
                 if is_best:
                     self.best_val_score = val_mrr
-                    self.console.print(f"[bold green][*] New Best Model: MRR = {val_mrr:0.4f}[/bold green]")
+                    self.console.print(
+                        f"[bold green][*] New Best Model: MRR = {val_mrr:0.4f}[/bold green]"
+                    )
 
                 self.save_checkpoint(
                     self.checkpoint_dir / f"checkpoint_epoch_{epoch}.pt",
@@ -406,10 +451,13 @@ class ContrastiveTrainer:
                 )
 
             if self.global_step >= self.max_steps:
-                self.console.print("[yellow]Reached max_steps limit. Concluding training.[/yellow]")
+                self.console.print(
+                    "[yellow]Reached max_steps limit. Concluding training.[/yellow]"
+                )
                 break
 
         total_duration = time.time() - start_time
-        self.console.print(f"\n[bold green]Training Completed in {total_duration / 60:0.2f} minutes.[/bold green]")
+        self.console.print(
+            f"\n[bold green]Training Completed in {total_duration / 60:0.2f} minutes.[/bold green]"
+        )
         return {"best_val_mrr": self.best_val_score}
-

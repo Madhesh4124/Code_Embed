@@ -1,21 +1,18 @@
-"""Phase 5 Step 6: Mine and save train_hard_negatives.pt.
+"""Phase R2-C / Phase 5: Mine and save train_hard_negatives.pt.
 
-This script is the FIRST step to run before training with hard negatives.
-It mines BM25 hard negatives for all training queries and saves the index matrix
-to `data/processed/train_hard_negatives.pt`.
+This script mines BM25 hard negatives for all clean training queries and saves
+the index matrix to `data/processed_clean_v2/train_hard_negatives.pt`.
 
-Run this BEFORE `scripts/run_hard_negatives.py`.
+Pre-registered 3-tier false negative filters:
+1. Identical docstring intent (docstring_i == docstring_j)
+2. Normalized AST skeleton match (>= 20 AST nodes)
+3. MinHash 3-gram Jaccard similarity (J >= 0.70)
 
 Usage:
     uv run python scripts/mine_hard_negatives.py
     uv run python scripts/mine_hard_negatives.py --k 7 --workers 4
 """
 
-# IMPORTANT: The if __name__ == '__main__' guard must wrap ALL executor code.
-# On Windows, the 'spawn' process start method re-imports this module in each
-# child process — without this guard, the executor is instantiated recursively
-# and the process hangs silently. We use ThreadPoolExecutor (not Process-based)
-# in training/hard_negatives.py, but this guard is kept as best practice.
 if __name__ == "__main__":
     import argparse
     import sys
@@ -29,10 +26,10 @@ if __name__ == "__main__":
         if hasattr(sys.stderr, "reconfigure"):
             sys.stderr.reconfigure(encoding="utf-8")
 
-    from training.hard_negatives import generate_train_hard_negatives
+    from training.hard_negatives import DEFAULT_DATA_DIR, generate_train_hard_negatives
 
     parser = argparse.ArgumentParser(
-        description="Mine BM25 hard negatives for Phase 5 training."
+        description="Mine BM25 hard negatives with 3-tier false negative exclusion filters."
     )
     parser.add_argument(
         "--k",
@@ -47,10 +44,16 @@ if __name__ == "__main__":
         help="Dataset split to mine from (default: 'train').",
     )
     parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=str(DEFAULT_DATA_DIR),
+        help="Directory containing clean parquet dataset (default: data/processed_clean_v2).",
+    )
+    parser.add_argument(
         "--output",
         type=str,
         default="train_hard_negatives.pt",
-        help="Output .pt filename saved to data/processed/ (default: train_hard_negatives.pt).",
+        help="Output .pt filename saved to data-dir (default: train_hard_negatives.pt).",
     )
     parser.add_argument(
         "--batch-size",
@@ -66,22 +69,27 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    print("=== Phase 5: Hard Negative Mining ===", flush=True)
+    data_dir = Path(args.data_dir)
+    print("=== Phase R2-C: Hard Negative Mining ===", flush=True)
+    print(f"Data Dir:   {data_dir}", flush=True)
     print(f"Split:      {args.split}", flush=True)
     print(f"K:          {args.k}", flush=True)
     print(f"Batch size: {args.batch_size} queries/chunk", flush=True)
-    print(f"Output:     data/processed/{args.output}", flush=True)
+    print(f"Output:     {data_dir / args.output}", flush=True)
     print(f"Platform:   {sys.platform}", flush=True)
     print(flush=True)
-
 
     output_path = generate_train_hard_negatives(
         k=args.k,
         split=args.split,
+        data_dir=data_dir,
         output_filename=args.output,
         batch_size=args.batch_size,
         num_workers=args.workers,
     )
 
     print(f"\n[OK] Done! Hard negatives saved to: {output_path}", flush=True)
-    print("Next step: run `uv run python scripts/run_hard_negatives.py --config configs/shared_hard.yaml`", flush=True)
+    print(
+        "Next step: run `uv run python scripts/run_hard_negatives.py --config configs/shared_hard_clean.yaml`",
+        flush=True,
+    )
