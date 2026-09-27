@@ -1,0 +1,79 @@
+{
+  "within_split_duplicates": {
+    "train": {
+      "total_rows": 360957,
+      "unique_code": 360957,
+      "duplicate_code_count": 0,
+      "duplicate_code_pct": 0.0,
+      "unique_queries": 344405,
+      "duplicate_query_count": 16552,
+      "duplicate_query_pct": 4.585587756990445
+    },
+    "validation": {
+      "total_rows": 20115,
+      "unique_code": 20115,
+      "duplicate_code_count": 0,
+      "duplicate_code_pct": 0.0,
+      "unique_queries": 19562,
+      "duplicate_query_count": 553,
+      "duplicate_query_pct": 2.7491921451652996
+    },
+    "test": {
+      "total_rows": 19632,
+      "unique_code": 19632,
+      "duplicate_code_count": 0,
+      "duplicate_code_pct": 0.0,
+      "unique_queries": 19106,
+      "duplicate_query_count": 526,
+      "duplicate_query_pct": 2.679299103504482
+    }
+  },
+  "length_distribution_comparison": {
+    "sample_size": 10000,
+    "sampling_method": "uniform_random_sample_seed_42",
+    "kept": {
+      "mean": 104.5008,
+      "std": 125.63830625792438,
+      "p10": 27.0,
+      "p25": 40.0,
+      "median": 68.0,
+      "p75": 121.0,
+      "p90": 212.0
+    },
+    "dropped": {
+      "mean": 72.1934,
+      "std": 137.00443568162308,
+      "p10": 15.0,
+      "p25": 20.0,
+      "median": 38.0,
+      "p75": 79.0,
+      "p90": 151.0
+    }
+  },
+  "repository_distribution_comparison": {
+    "top_kept_repos": {
+      "saltstack/salt": 290,
+      "materialsproject/pymatgen": 62,
+      "brocade/pynos": 52,
+      "mitsei/dlkit": 51,
+      "google/grr": 49,
+      "gem/oq-engine": 49,
+      "tensorflow/tensor2tensor": 47,
+      "bitesofcode/projexui": 41,
+      "bcbio/bcbio-nextgen": 41,
+      "apple/turicreate": 40
+    },
+    "top_dropped_repos": {
+      "StackStorm/pybind": 259,
+      "twilio/twilio-python": 148,
+      "saltstack/salt": 93,
+      "mitsei/dlkit": 93,
+      "fprimex/zdesk": 69,
+      "spyder-ide/spyder": 59,
+      "senaite/senaite.core": 48,
+      "bitesofcode/projexui": 44,
+      "wummel/linkchecker": 41,
+      "pypa/pipenv": 39
+    }
+  }
+}
