@@ -339,13 +339,16 @@ We adopt the phase-by-phase model hierarchy from the original [`Phases.md`](Phas
 - **Commit Strategy**: Modular commits per remediation phase:
   - Phase R0: Clean Data Preprocessing, AST coordinate slicing, MinHash LSH deduplication, and data integrity tests.
   - Phase R1: Clean Lexical Baseline calibration (ATIRE variant), exact test NN Jaccard audit, and protocol errata.
-- **Current Status**: Phase R2-A (Basic Encoder), Phase R2-B (Shared Encoder, Fallback Winner `lr_5e-4_tau_0.05` Val MRR = **0.4033**), Phase R2-C (BM25 Hard Negative Mining, 18,594 false negatives purged), and Phase R2-D (Hard-Negative Shared Encoder, Full Val MRR = **0.4074**, Low-Overlap = **0.3047**) COMPLETE. Both Pilot Gate criteria solidly passed. $\Delta_{\text{mining}} = \mathbf{+0.0116}$ on Low-Overlap queries (+5.58 pts over BM25).
+  - Phase R2: Basic, Shared, BM25 Hard Negative, and FAISS Dense Hard Negative models.
+  - Phase R4: Controlled single-variable ablations (CLSPooling collapse, SeqLen 128 efficiency, Dual Encoder FAISS ablations).
+  - Phase R3: Pre-registered Final Test Benchmark (19,632 queries), Overlap Stratification, Paired Bootstrap Significance Battery, and Capacity Error Rubric.
+- **Current Status**: 
+  - **Shared Encoder (FAISS Dense HN)** achieves our new clean SOTA on Test: **MRR 0.4192** [0.4132, 0.4250], Recall@1 **0.3216**, Recall@10 **0.6020**, NDCG@10 **0.4562**, beating In-Batch (0.4157) and BM25 Hard Negatives (0.4155).
+  - **Teammate Dual Encoder Benchmark**: Baseline reaches **0.2900** Test MRR (decoupling collapse), recovered via FAISS dense hard negatives to **0.4807** ($\tau=0.10$) and **0.4684** ($\tau=0.07$).
+  - **Capacity Error Rubric**: 93% Category B failures (capacity errors), passing the Scaling Gate for Phase 6.5.
 - **Next Action**: 
-  1. Phase R4: Architecture & Hyperparameter Ablations on clean data:
-     - Pooling: MaskedMeanPooling vs CLSPooling
-     - Temperature: $\tau \in \{0.05, 0.07, 0.10\}$
-     - Sequence Length: $L \in \{128, 256\}$
-  2. Conduct 3-seed replication (seeds 42, 123, 456) of winning recipe $(\text{LR}=5\text{e-}4, \tau=0.05)$ and evaluate on test once with paired bootstrap vs BM25.
+  1. Merge `r-phase` into `main` branch.
+  2. Proceed to Hybrid Retrieval ($\text{BM25} + \text{Dense}$) and Phase 6.5 Model Capacity Scaling.
 
 
 
