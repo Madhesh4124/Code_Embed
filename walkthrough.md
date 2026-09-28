@@ -597,29 +597,4 @@ To avoid candidate bucket bias from LSH, an exact inverted index over word 3-gra
   - On the critical semantic retrieval slice (**Low-Overlap queries**), hard negative mining yields a strong gain of **+1.16 MRR points** (0.3047 vs 0.2931), outperforming lexical BM25 by **+5.58 MRR points** (0.3047 vs 0.2489).
   - Solidly passes both Pilot Gate criteria ($0.4074 \ge 0.3910$ and $0.3047 > 0.2489$).
 
-### 12.7 Phase R4: Architecture & Hyperparameter Ablations (Complete)
-
-We conducted controlled, single-variable ablations against the clean baseline recipe ($\text{LR} = 5\text{e-}4, \tau = 0.05, 2\text{ epochs}$, AdamW, 10% warmup, cosine decay) evaluated on the full validation split ($N = 20,115$ queries against the full 20,115 validation corpus with 1,000 bootstrap resamples) to maintain strict test set discipline:
-
-#### 1. Ablation Comparative Benchmark Table
-
-| Model / Experiment | Ablation Category | Variant | Full Val MRR [95% CI] | Full Val R@1 | Full Val R@5 | Full Val R@10 | Full Val NDCG@10 | Training Time | MLflow Run ID |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **In-Batch Baseline** | Reference | Mean, $L=256, \tau=0.05$ | **0.4033** [0.3973, 0.4093] | **0.3038** | **0.5118** | **0.5914** | **0.4412** | 38.50m | `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt` |
-| **Hard Negative Shared** | Reference | Mean, $L=256, \tau=0.05$ | **0.4074** [0.4015, 0.4135] | **0.3091** | **0.5166** | **0.5976** | **0.4458** | 41.71m | `c4e2e5c02be74bf19eacf4ea4fc68c5c` |
-| **`ablation_pooling_cls`** | Pooling | CLSPooling ($L=256$) | **0.1566** [0.1524, 0.1605] | **0.0957** | **0.2120** | **0.2751** | **0.1762** | 38.55m | `1dd691e839ee4684b17d990b51cde549` |
-| **`ablation_seq_len_128`** | Sequence Length | $L=128$ (Mean) | **0.3943** [0.3886, 0.4002] | **0.2965** | **0.4998** | **0.5801** | **0.4314** | **21.71m** | `ef009dd84a66465a92847ab378b0bdea` |
-
-#### 2. Key Scientific Findings
-
-* **Ablation 1: Pooling Strategy (CLSPooling vs MaskedMeanPooling)**:
-  * **Result**: Replacing `MaskedMeanPooling` with `CLSPooling` leads to a massive collapse in validation retrieval performance: MRR plunges from **0.4033 to 0.1566** ($\Delta_{\text{pooling}} = \mathbf{-0.2467}$, a **$61.2\%$ relative drop**). Recall@1 drops by **$20.81$ percentage points** (from 30.38% to 9.57%), and Recall@10 drops from 59.14% to 27.51%.
-  * **Mechanism**: In pretrained language models (like BERT/RoBERTa), the `[CLS]` token is explicitly trained via Masked Language Modeling and Next Sentence Prediction to serve as a sequence-level summary. When training a Transformer encoder from scratch on contrastive loss without pretraining, token 0 has no special inductive bias or gradient advantage. In contrast, `MaskedMeanPooling` calculates the exact mean of all non-padding token contextual vectors across the sequence, propagating gradients back into all token representations evenly. **`MaskedMeanPooling` is proven indispensable for from-scratch code search transformers.**
-
-* **Ablation 2: Sequence Length ($L=128$ vs $L=256$)**:
-  * **Result**: Truncating both code and docstring sequence lengths to $L=128$ achieves **0.3943 validation MRR**, retaining **$97.77\%$ of the full $L=256$ baseline's accuracy** ($0.3943 / 0.4033$).
-  * **Throughput & Efficiency**: Training time per epoch dropped from **19.25 minutes to 10.85 minutes** ($1.78\times$ speedup; 2 epochs completed in **21.71 minutes** vs 38.50 minutes). Peak self-attention activation memory dropped by $\approx 4\times$ ($O(L^2)$ complexity).
-  * **Architectural Tradeoff**: Because Python docstring queries are typically short ($\le 30$ tokens) and the median clean Python function length is 68 tokens, $L=128$ tokens captures the complete function signature, docstring, and primary control-flow block for $>75\%$ of functions. For resource-constrained or real-time inference environments, $L=128$ is a highly effective Pareto-optimal architecture. For maximal ranking precision, the full $L=256$ baseline remains the superior choice.
-
-
 
