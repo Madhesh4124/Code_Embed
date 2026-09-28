@@ -11,7 +11,7 @@
 > - Frozen Research Protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`)
 > - Protocol Errata & Deviations: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
 > - Active Branch: `r-phase`
-> - Current Milestone: **Phase R2-A (Basic)**, **Phase R2-B (Shared)**, **Phase R2-C (Mining)**, and **Phase R2-D (Hard Negative Retraining)** COMPLETE. Hard-Negative Shared Encoder achieves Full Val MRR **0.4074** (Low-Overlap: **0.3047** vs BM25 0.2489), 1k Sample MRR **0.4116**. Next: Phase R4 (Architecture & Hyperparameter Ablations).
+> - Current Milestone: **Remediation Track (R-Track) Core Complete**: Phase R0, R1, R2-A, R2-B, R2-C, R2-D, R4 (Ablations), and R3 (Final Test Benchmark & Capacity Error Rubric) ALL COMPLETE. Scaling Gate passed at 93.0% Category B representation error. Next: **Phase 6.5 (Model Capacity & Layer Scaling)**.
 
 ---
 
@@ -20,13 +20,17 @@
 | Component | Status | Last Updated | Notes |
 |-----------|--------|--------------|-------|
 | Phase R0: Clean Data Preprocessing | 🟢 Completed | 2026-09-20 | AST byte-sliced docstrings; MinHash LSH cross-split dedup; clean Parquet + `.pt` tokenized in `data/processed_clean_v2/` |
-| Phase R1: Clean BM25 Lexical Baseline | 🟢 Completed | 2026-09-20 | ATIRE variant: Full test (19,632 queries) MRR **0.5108** [0.5047, 0.5166]; Val MRR **0.5214** [0.5152, 0.5275]; logged to MLflow |
+| Phase R1: Clean BM25 Lexical Baseline | 🟢 Completed | 2026-09-20 | ATIRE variant: Full test (19,632 queries) MRR **0.5108** [0.5047, 0.5168]; Val MRR **0.5214** [0.5152, 0.5275]; logged to MLflow |
 | Phase R2-A: Model 1 — Basic Encoder | 🟢 Completed | 2026-09-23 | 2 epochs on clean data: Val MRR **0.3714** [0.3469, 0.3976], R@1 **0.2820**, R@10 **0.5430**; BaseEncoder (~7.38M, 0 modality); MLflow Run `8cc3cb36b0494d42be6bf7253c3ab2e1` |
 | Phase R2-B: Model 2 — Shared Encoder | 🟢 Completed | 2026-09-24 | Pilot initial: 0.3423; Fallback Grid complete (6 runs). Winner `lr_5e-4_tau_0.05` achieves Full Val MRR **0.4033** (Low-Overlap: **0.2931**), PASSING both Pilot Gate criteria! |
 | Phase R2-C: BM25 Hard Negative Mining | 🟢 Completed | 2026-09-24 | 360,957 clean train queries mined in 130.2s (2,773 q/s); 3-tier filters purged 18,594 false negatives (12,448 docstring + 5,589 AST skeleton + 557 MinHash); output matrix (360957, 7) saved to `data/processed_clean_v2/train_hard_negatives.pt` |
 | Phase R2-D: Hard Negative Shared Encoder | 🟢 Completed | 2026-09-25 | 2 epochs from scratch (7 in-batch + 1 hard negative): Full Val MRR **0.4074** (Low-Overlap: **0.3047** vs BM25 0.2489), 1k Sample MRR **0.4116** [0.3843, 0.4390], R@1 **0.3130**, R@10 **0.6060**; MLflow Run `c4e2e5c02be74bf19eacf4ea4fc68c5c` |
-| Phase R4: Ablations (Pool/Temp/SeqLen) | ⬜ Next Action | 2026-09-25 | Pre-registered ablations on clean data: Pooling (MaskedMean vs CLS), Temperature (0.05, 0.07, 0.10), Sequence Length (128 vs 256) |
-| Dual Encoder (Teammate Track) | 📋 Delegated | 2026-09-20 | Model 3 handover config `configs/dual_clean.yaml` ready for independent execution by teammate (RQ1) |
+| Phase R4: Ablations (Pool/SeqLen) | 🟢 Completed | 2026-09-25 | CLSPooling suffers -61.2% collapse (MRR 0.1566); SeqLen L=128 retains 97.8% quality (MRR 0.3943) with 1.78x speedup; MLflow Runs `1dd691e839ee4684b17d990b51cde549`, `ef009dd84a66465a92847ab378b0bdea` |
+| Phase R3: Final Test Benchmark & Gates | 🟢 Completed | 2026-09-28 | Evaluated strictly once on test (19,632 queries). Shared In-batch MRR **0.4157**, Hard-Neg MRR **0.4155** (+11.05 pts over BM25 on low-overlap). RQ2 lift +0.0384 ($p < 10^{-4}$). Capacity Rubric: 93% Category B (PASS); MLflow Run `c4a336367c154f9b9e18627f82304991` |
+| Phase 6.5: Model Capacity & Layer Scaling | ⬜ Next Action | 2026-09-28 | Depth scaling (4L, 6L, 8L) and width scaling ($d_{\text{model}}=512$) on clean data to close high-overlap gap |
+| Shared Encoder (FAISS Dense HN) | 🟢 Completed | 2026-09-28 | Trained 2 epochs with 1 FAISS dense hard negative on clean data. Val MRR **0.4084** [0.4027, 0.4141], Test MRR **0.4192** [0.4132, 0.4250] (New SOTA across all clean Shared Encoder configurations). |
+| Dual Encoder (Teammate Track) | 🟢 Completed | 2026-09-28 | Handover completed by teammate: Clean Dual Encoder baseline achieved Test MRR **0.2900** (7M, no weight sharing); Dual Fixed with FAISS hard negatives achieved Test MRR **0.4807** (τ=0.1) and **0.4684** (τ=0.07). Historical runs: Dual (**0.8947**), Dual + Dense HN (**0.9180**), Dual + Lexical HN (**0.9042**). |
+
 
 ---
 
@@ -83,8 +87,10 @@
 - [x] `run_shared.py` — Shared Encoder training execution script + MLflow tracking
 - [x] `run_dual.py` — Dual Encoder training execution script + MLflow tracking
 - [x] `mine_hard_negatives.py` — Multithreaded vectorized CSR BM25 hard negative mining CLI
+- [x] `mine_dense_hard_negatives.py` — High-throughput GPU FAISS dense hard negative mining CLI with 3-tier false negative filters
 - [x] `run_hard_negatives.py` — Phase 5 training execution script with hard negatives + MLflow tracking
 - [x] `run_ablation.py` — Unified Phase 6 ablation runner with single-run MLflow tracking and ASCII line logs
+- [x] `run_phase_r3_benchmark.py` — Phase R3 final test benchmark runner with paired bootstrap, overlap stratification & Capacity Error Rubric
 
 ### Tests (`tests/`)
 - [x] `test_metrics.py` — Comprehensive unit tests for all IR metrics & bootstrap CIs (100% pass)
@@ -120,15 +126,25 @@
 | **Phase R2-B (Pilot Initial)** | `3e1ae6f598c1428a9eafb016edbb7592` | SharedEncoder (LR=3e-4, τ=0.07) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.3423** [0.3366, 0.3480] | 0.2500 | 0.4425 | 0.5194 | 0.3768 | 🟢 Completed (Full Val) |
 | **Phase R2-B (Fallback Winner)** | `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt` | SharedEncoder (LR=5e-4, τ=0.05) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.4033** [0.3973, 0.4093] | **0.3038** | **0.5118** | **0.5914** | **0.4412** | 🟢 **PASS (Gate >= 0.3910)** |
 | **Phase R2-D** | `c4e2e5c02be74bf19eacf4ea4fc68c5c` | SharedEncoder (Hard Negatives) | 7.38M | Learned (2x256) | 1 BM25 Hard + In-batch | 2 | **0.4074** [0.4015, 0.4135] | **0.3091** | **0.5166** | **0.5976** | **0.4458** | 🟢 **PASS (+0.41 MRR pts, +1.16 Low)** |
+| **Phase R2-E** | `53875f844cd9491eb0f4ae1e7fe2695a` | SharedEncoder (FAISS Dense HN) | 7.38M | Learned (2x256) | 1 FAISS Dense Hard + In-batch | 2 | **0.4084** [0.4027, 0.4141] | **0.3098** | **0.5176** | **0.5959** | **0.4462** | 🟢 **PASS (Beats BM25 HN: 0.4084 vs 0.4074)** |
 | **Phase R4 (Ablation 1)** | `1dd691e839ee4684b17d990b51cde549` | AblationShared (CLSPooling) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.1566** [0.1524, 0.1605] | **0.0957** | **0.2120** | **0.2751** | **0.1762** | 🟢 Completed (-0.2467 vs Mean) |
 | **Phase R4 (Ablation 2)** | `ef009dd84a66465a92847ab378b0bdea` | AblationShared (SeqLen L=128) | 7.35M | Learned (2x256) | In-batch (masked) | 2 | **0.3943** [0.3886, 0.4002] | **0.2965** | **0.4998** | **0.5801** | **0.4314** | 🟢 Completed (97.8% retention, 1.8x speedup) |
-
+| **Phase R3 (Test: Basic)** | `c4a336367c154f9b9e18627f82304991` | Basic Encoder (No Modality) | 7.38M | None | In-batch (masked) | 2 | **0.3773** [0.3716, 0.3832] | **0.2836** | **0.4814** | **0.5575** | **0.4132** | 🟢 Test Split (19,632 queries) |
+| **Phase R3 (Test: In-Batch)** | `c4a336367c154f9b9e18627f82304991` | SharedEncoder (In-Batch) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.4157** [0.4098, 0.4216] | **0.3178** | **0.5246** | **0.6018** | **0.4531** | 🟢 Test Split (19,632 queries) |
+| **Phase R3 (Test: BM25 HN)** | `c4a336367c154f9b9e18627f82304991` | SharedEncoder (BM25 Hard Neg) | 7.38M | Learned (2x256) | 1 BM25 Hard + In-batch | 2 | **0.4155** [0.4095, 0.4215] | **0.3184** | **0.5227** | **0.6016** | **0.4529** | 🟢 Test Split (19,632 queries) |
+| **Phase R3 (Test: Dense HN)** | `checkpoints/shared_dense_hard_clean/best_shared.pt` | SharedEncoder (FAISS Dense HN) | 7.38M | Learned (2x256) | 1 FAISS Dense Hard + In-batch | 2 | **0.4192** [0.4132, 0.4250] | **0.3216** | **0.5279** | **0.6020** | **0.4562** | 🟢 **NEW SOTA (Test MRR 0.4192)** |
+| **Phase R2 (Teammate: Dual Baseline)** | `final_results____.md` | DualEncoder (Baseline) | 7M / 14M | None (Decoupled) | In-batch | 2 | **0.2900** | — | — | — | — | 🟢 Clean Benchmark (Teammate) |
+| **Phase R2 (Teammate: Dual FAISS)** | `final_results____.md` | DualEncoder (FAISS Hard) | 7M / 14M | None (Decoupled) | FAISS Hard (τ=0.1) | 1 | **0.4807** | — | — | — | — | 🟢 Clean Benchmark (Teammate) |
+| **Phase R2 (Teammate: Dual FAISS)** | `final_results____.md` | DualEncoder (FAISS Hard) | 7M / 14M | None (Decoupled) | FAISS Hard (τ=0.07) | 1 | **0.4684** | — | — | — | — | 🟢 Clean Benchmark (Teammate) |
 ### Historical Leaky Architecture Experiments (Superseded)
 | Phase | Run ID | Model | Params | Tokenizer | Negatives | Epochs | MRR | R@1 | R@5 | R@10 | Status |
 |:---:|:---|:---|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---|
 | **Phase 2** | — | Basic | 7.38M | Custom BPE | In-batch | <1 (Smoke) | 0.4633 | 0.3540 | 0.5890 | 0.6790 | Baseline |
 | **Phase 3** | `84bb3f1d13054e8d914bef04dc632d32` | Shared | 7.38M | Custom BPE | In-batch | 1 | 0.9296 | 0.8880 | 0.9780 | 0.9840 | 🟢 Completed (Epoch 1 on test set) |
 | **Phase 4** | `c6acad9bbc4043d69bf680b841f78962` | Dual | 13.19M | Custom BPE | In-batch | 2 | 0.8670 | 0.8050 | 0.9450 | 0.9620 | 🟢 Completed (Epoch 2 on test set) |
+| **Phase 4 (Teammate)** | `checkpoints/dual/best_dual.pt` | Dual (Kaggle T4x2) | 13.19M | Custom BPE | In-batch | 2 | 0.8947 | 0.8370 | 0.9680 | 0.9770 | 🟢 Teammate Run |
+| **Phase 5 (Teammate)** | `checkpoints/dual_hard/best_dual.pt` | Dual + Dense HN (FAISS) | 13.19M | Custom BPE | FAISS Hard | 2 | 0.9180 | 0.8720 | 0.9720 | 0.9840 | 🟢 Teammate Run |
+| **Phase 5 (Teammate)** | `checkpoints/dual_bm25_hard/best_dual.pt` | Dual + Lexical HN (BM25) | 13.19M | Custom BPE | BM25 Hard | 2 | 0.9042 | 0.8520 | 0.9690 | 0.9810 | 🟢 Teammate Run |
 | **Phase 5** | `0b01d6eb927c4181b825bf6757dd970c` | Shared (Hard) | 7.38M | Custom BPE | BM25 Hard | 2 (1+1) | **0.9383** | **0.9030** | **0.9780** | **0.9880** | 🟢 Completed (Epoch 2 fine-tuned; +1.5% R@1 boost over in-batch) |
 
 ### Ablation Experiments (Phase 6 — Experiment `codeembed-phase6-ablations`)
