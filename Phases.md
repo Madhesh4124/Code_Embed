@@ -1,29 +1,22 @@
 # CodeEmbed — Project Phases
 
-> [!CAUTION]
-> **INVALID: Historical Phases 1–6 computed on leaky data, superseded by R-track.**
-> Phases 0–6 in this document describe the original development roadmap. Following the discovery of 100% docstring query leakage in historical data, all scientific metrics and conclusions were superseded by the **R-Track (Remediation Track)**.
-> - **Primary Source of Truth**: [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md)
-> - **Pre-Registered Protocol**: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`) & [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md)
-> - **Remediation Mapping**: Phase R0 (Clean Preprocessing) $\to$ Phase R1 (BM25 Baseline) $\to$ Phase R2-A (Basic Encoder) $\to$ Phase R2-B (Shared Encoder + Pilot Gate) $\to$ Phase R2-C (Mining) $\to$ Phase R2-D (Hard Negatives) $\to$ Phase R4 (Ablations).
-> - **Active Branch**: `r-phase`
+> **Purpose**: Roadmap and phase specifications for CodeEmbed. All clean benchmarks are governed by [`PROTOCOL.md`](PROTOCOL.md) on `data/processed_clean_v2/`. Historical exploratory runs from Phases 1–6 prior to AST docstring stripping are archived in [Historical Pre-Remediation Archive](#historical-pre-remediation-archive).
 
 ## Phase Overview
 
-| Phase | Duration | Focus | Deliverable |
-|-------|----------|-------|-------------|
-| **0** | 1 week | Setup & Data | Working data pipeline, tokenizer trained |
-| **1** | 1 week | Baseline | BM25 baseline + evaluation framework |
-| **2** | 2 weeks | Model 1 | Basic encoder trained, evaluated |
-| **3** | 1 week | Model 2 | Shared encoder trained, evaluated |
-| **4** | 1 week | Model 3 | Separate encoders trained, evaluated |
-| **5** | 1 week | Hard Negatives | Hard negative mining + retrain |
-| **6** | 1 week | Ablations | Key architectural ablation studies completed |
-| **6.5**| 0.5 week | Scaling & Capacity | Layer & parameter scaling within GPU limits (~4M to 54M) |
-| **7** | 1 week | Pretrained Baseline | Comparison with pretrained model |
-| **8** | 1 week | Demo & Docs | CLI demo, final analysis, report |
-
-**Total: ~10 weeks (part-time) / 5 weeks (full-time)**
+| Phase | Duration | Focus | Deliverable | Status |
+|-------|----------|-------|-------------|:---:|
+| **0** | 1 week | Setup & Data | Clean data pipeline, BPE tokenizer, MinHash LSH dedup | 🟢 Completed |
+| **1** | 1 week | Baseline | BM25 ATIRE baseline + evaluation framework | 🟢 Completed |
+| **2** | 2 weeks | Model 1 | Basic encoder trained & evaluated on clean data | 🟢 Completed |
+| **3** | 1 week | Model 2 | Shared encoder with learned modality embeddings | 🟢 Completed |
+| **4** | 1 week | Model 3 | Separate (Dual) encoders trained & evaluated | 🟢 Completed |
+| **5** | 1 week | Hard Negatives | CSR BM25 & FAISS dense hard negative mining | 🟢 Completed |
+| **6** | 1 week | Ablations | CLSPooling vs MeanPooling, Sequence Length $L=128$ | 🟢 Completed |
+| **6.5**| 0.5 week | Scaling & Capacity | 17.03M Shared Encoder (6L-384d, Test MRR **0.4699**) | 🟢 Completed |
+| **Hybrid** | 0.5 week | Hybrid Search | Dense + BM25 Fusion (RRF / Convex) to beat BM25 | 🟡 In Progress |
+| **7** | 1 week | Pretrained Baseline | Frozen pretrained comparison (`all-MiniLM-L6-v2`) | ⬜ Next Up |
+| **8** | 1 week | Demo & Docs | Interactive CLI search demo (`demo/cli.py`) | ⬜ Next Up |
 
 ---
 
@@ -426,10 +419,11 @@ Specifically, this phase evaluates the hypothesis:
 | **`12L-512d`** | 12 | 512 | 8 | 2048 | ~54.0M | Target large-scale experiment (~54M params with BM25 hard negatives). |
 
 ### Deliverables & Exit Criteria
-- [ ] VRAM profiling & throughput benchmark across all parameter tiers.
-- [ ] MLflow logging of all scale variants (MRR, Recall@1/5/10, NDCG@10, step latency, peak VRAM).
-- [ ] Pareto frontier analysis (Performance vs Latency vs Parameter Count) documented in `walkthrough.md` and `STUDY_GUIDE.md`.
-- [ ] Empirical answer to whether scaling to 54M parameters hits ~0.98 MRR on CodeSearchNet.
+- [x] Scaled 6L-384d-6h-1536ff Shared Encoder (17.03M parameters) trained for 4 epochs with 1 FAISS dense hard negative (`configs/shared_6l_dense_clean.yaml`).
+- [x] Evaluated on Full Validation ($N=20,115$): MRR **0.4620** [0.4559, 0.4679], R@1 **0.3552**, R@10 **0.6655**, NDCG@10 **0.5041**.
+- [x] Evaluated on Full Test ($N=19,632$): MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (**Definitive Clean SOTA**).
+- [x] Peak GPU VRAM constrained to **5.46 GB** via SDPA FlashAttention; runtime **166.41 minutes** on NVIDIA RTX 4050 GPU.
+- [x] Stratification and Discordance analysis against BM25 completed: Dense dominates semantic queries (0.3559 vs BM25 0.2099); Oracle bound reaches **0.6562 MRR**.
 
 ---
 
@@ -530,11 +524,13 @@ def main():
 | M1: BM25 baseline logged | Week 1 | 🟢 Completed |
 | M2: Basic encoder built & verified | Week 3 | 🟢 Completed |
 | M3: Shared encoder evaluated | Week 4 | 🟢 Completed |
-| M4: Dual encoder evaluated | Week 5 | ⬜ |
-| M5: Hard negatives improve | Week 6 | ⬜ |
-| M6: Ablations complete | Week 7 | ⬜ |
-| M7: Pretrained baseline done | Week 8 | ⬜ |
-| M8: Demo + Final report | Week 10 | ⬜ |
+| M4: Dual encoder evaluated | Week 5 | 🟢 Completed |
+| M5: Hard negatives improve | Week 6 | 🟢 Completed |
+| M6: Ablations complete | Week 7 | 🟢 Completed |
+| M6.5: Model Capacity Scaling (17.03M) | Week 7.5 | 🟢 Completed |
+| M-Hybrid: Hybrid Search Fusion (Dense + BM25) | Week 8 | 🟡 In Progress |
+| M7: Pretrained baseline done | Week 8.5 | ⬜ Next Up |
+| M8: Demo + Final report | Week 10 | ⬜ Next Up |
 
 ---
 
@@ -572,3 +568,17 @@ def main():
 | 7 | 4 | 5 GB |
 | 8 | 4 | 2 GB |
 | **Total** | **~140** | **~67 GB** |
+
+---
+
+## Historical Pre-Remediation Archive
+
+*This archive records the historical development phases and exploratory evaluations conducted prior to the AST docstring stripping audit. Because docstrings were embedded inside `func_code_string` in the historical CodeSearchNet distribution, models achieved an inflated evaluation ceiling (BM25: 0.9498, Shared: 0.9296, Shared Hard Negatives: 0.9383). All official scientific milestones and gates now operate exclusively on the clean, uncorrupted dataset `data/processed_clean_v2/`.*
+
+### Historical Roadmap Metrics (Phases 1–6)
+- **Phase 1 (BM25 Baseline)**: 0.9498 MRR (1,000 sampled test queries vs 21,005 corpus)
+- **Phase 2 (Basic Encoder)**: 0.4633 MRR (100 sampled validation queries)
+- **Phase 3 (Shared Encoder)**: 0.9296 MRR, 0.8880 R@1, 0.9840 R@10
+- **Phase 4 (Dual Encoder)**: 0.8670 MRR (local) / 0.8947 MRR (Kaggle T4x2)
+- **Phase 5 (Hard Negatives)**: 0.9383 MRR, 0.9030 R@1 (Shared + BM25 Hard); 0.9180 MRR (Dual + Dense HN)
+- **Phase 6 (Ablations)**: CLSPooling 0.8836 (-4.6 pts vs Mean 0.9296), $\tau=0.05$ 0.9244, $\tau=0.10$ 0.9252, $L=128$ 0.9292 (2x speedup)

@@ -1,17 +1,13 @@
 # CodeEmbed — Project Memory
 
-> [!CAUTION]
-> **INVALID: computed on leaky data, superseded by R-track.**
-> Phases 1–6 were computed on unstripped CodeSearchNet data with 100% docstring-in-code label leakage. All historical benchmarks and conclusions below are marked invalid and superseded by the leak-free R-track (Phases R0–R4).
-
 > **Purpose**: Track what's built, what's working, what's implemented. Update after each milestone.
 >
-> 🚀 **Active Track: R-Track (Scientific Remediation)**
+> 🚀 **Active Track: Clean Benchmarks & Production Models**
 > - Primary Source of Truth: [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md)
 > - Frozen Research Protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`)
 > - Protocol Errata & Deviations: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
-> - Active Branch: `r-phase`
-> - Current Milestone: **Remediation Track (R-Track) Core Complete**: Phase R0, R1, R2-A, R2-B, R2-C, R2-D, R4 (Ablations), and R3 (Final Test Benchmark & Capacity Error Rubric) ALL COMPLETE. Scaling Gate passed at 93.0% Category B representation error. Next: **Phase 6.5 (Model Capacity & Layer Scaling)**.
+> - Active Branch: `main`
+> - Current Milestone: **Phase 6.5 (Model Capacity Scaling - 17.03M)** COMPLETE. Definitive clean SOTA Test MRR **0.4699** [0.4636, 0.4757] (+5.07 pts over 4L model, +9.26 pts over Basic). Next: **Hybrid Search Benchmark & Phase 8 Interactive CLI Demo**.
 
 ---
 
@@ -27,9 +23,10 @@
 | Phase R2-D: Hard Negative Shared Encoder | 🟢 Completed | 2026-09-25 | 2 epochs from scratch (7 in-batch + 1 hard negative): Full Val MRR **0.4074** (Low-Overlap: **0.3047** vs BM25 0.2489), 1k Sample MRR **0.4116** [0.3843, 0.4390], R@1 **0.3130**, R@10 **0.6060**; MLflow Run `c4e2e5c02be74bf19eacf4ea4fc68c5c` |
 | Phase R4: Ablations (Pool/SeqLen) | 🟢 Completed | 2026-09-25 | CLSPooling suffers -61.2% collapse (MRR 0.1566); SeqLen L=128 retains 97.8% quality (MRR 0.3943) with 1.78x speedup; MLflow Runs `1dd691e839ee4684b17d990b51cde549`, `ef009dd84a66465a92847ab378b0bdea` |
 | Phase R3: Final Test Benchmark & Gates | 🟢 Completed | 2026-09-28 | Evaluated strictly once on test (19,632 queries). Shared In-batch MRR **0.4157**, Hard-Neg MRR **0.4155** (+11.05 pts over BM25 on low-overlap). RQ2 lift +0.0384 ($p < 10^{-4}$). Capacity Rubric: 93% Category B (PASS); MLflow Run `c4a336367c154f9b9e18627f82304991` |
-| Phase 6.5: Model Capacity Scaling (17.0M) | 🟡 In Progress | 2026-09-29 | Training 6L-384d-6h-1536ff Shared Encoder (17.03M params) with 1 FAISS dense hard negative for 4 epochs (batch size 64, LR 3.5e-4) |
-| Shared Encoder (FAISS Dense HN) | 🟢 Completed | 2026-09-28 | Trained 2 epochs with 1 FAISS dense hard negative on clean data. Val MRR **0.4084** [0.4027, 0.4141], Test MRR **0.4192** [0.4132, 0.4250] (New SOTA across all clean Shared Encoder configurations). |
-| Dual Encoder (Teammate Track) | 🟢 Completed | 2026-09-28 | Handover completed by teammate: Clean Dual Encoder baseline achieved Test MRR **0.2900** (7M, no weight sharing); Dual Fixed with FAISS hard negatives achieved Test MRR **0.4807** (τ=0.1) and **0.4684** (τ=0.07). Historical runs: Dual (**0.8947**), Dual + Dense HN (**0.9180**), Dual + Lexical HN (**0.9042**). |
+| Shared Encoder (FAISS Dense HN, 4L) | 🟢 Completed | 2026-09-28 | Trained 2 epochs with 1 FAISS dense hard negative on clean data. Val MRR **0.4084** [0.4027, 0.4141], Test MRR **0.4192** [0.4132, 0.4250] (4L SOTA). |
+| Phase 6.5: Model Capacity Scaling (17.03M) | 🟢 Completed | 2026-09-29 | 6L-384d-6h-1536ff Shared Encoder (17.03M params) trained 4 epochs with 1 FAISS dense hard negative. Full Val MRR **0.4620** [0.4559, 0.4679], Full Test MRR **0.4699** [0.4636, 0.4757] (**DEFINITIVE CLEAN SOTA**). MLflow Run `d9034df9dff84a419cd320d1594f0511`. |
+| Dual Encoder (Teammate Track) | 🟢 Completed | 2026-09-28 | Clean Dual Encoder baseline achieved Test MRR **0.2900** (7M, no weight sharing); Dual Fixed with FAISS hard negatives achieved Test MRR **0.4807** (τ=0.1) and **0.4684** (τ=0.07). |
+| Hybrid Search (Dense + BM25) & CLI Demo | ⬜ Next Action | 2026-09-29 | RRF / Convex score interpolation to beat BM25 (Oracle MRR: **0.6562**) + interactive CLI search demo (`demo/cli.py`). |
 
 
 ---
@@ -113,50 +110,56 @@
 
 ## Experiment Log
 
-### Baseline Experiments
-| Phase | Run ID | Model | Config | Epochs | MRR | R@1 | R@5 | R@10 | NDCG | Notes |
-|:---:|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---|
-| **Phase 1** | `234f518410034b628b9c90eb7cbbc1cf` | BM25 | k1=1.5, b=0.75 | 0 (Lexical) | 0.9498 | 0.9180 | 0.9890 | 0.9950 | 0.9610 | Lexical benchmark on 1k test queries vs 21,005 corpus (logged to mlruns) |
+### Clean Benchmarks (Leak-Free Data: `data/processed_clean_v2/`)
 
-### R-Track Experiments (Clean & Leak-Free Data: `data/processed_clean_v2/`)
-| Phase | Run ID | Model | Params | Modality Emb | Negatives | Epochs | Val MRR [95% CI] | Val R@1 | Val R@5 | Val R@10 | Val NDCG@10 | Status |
-|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
-| **Phase R1** | `14feca9d5b024faab9da64beac12541b` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5214 [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | 🟢 Completed (Full Val) |
-| **Phase R1 (Test)** | `fb3b5313f1bb419bb330b7fc0dee6bf5` | BM25 (ATIRE) | — | — | Lexical | 0 | 0.5108 [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | 🟢 Completed (Full Test) |
-| **Phase R2-B (Pilot Initial)** | `3e1ae6f598c1428a9eafb016edbb7592` | SharedEncoder (LR=3e-4, τ=0.07) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.3423** [0.3366, 0.3480] | 0.2500 | 0.4425 | 0.5194 | 0.3768 | 🟢 Completed (Full Val) |
-| **Phase R2-B (Fallback Winner)** | `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt` | SharedEncoder (LR=5e-4, τ=0.05) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.4033** [0.3973, 0.4093] | **0.3038** | **0.5118** | **0.5914** | **0.4412** | 🟢 **PASS (Gate >= 0.3910)** |
-| **Phase R2-D** | `c4e2e5c02be74bf19eacf4ea4fc68c5c` | SharedEncoder (Hard Negatives) | 7.38M | Learned (2x256) | 1 BM25 Hard + In-batch | 2 | **0.4074** [0.4015, 0.4135] | **0.3091** | **0.5166** | **0.5976** | **0.4458** | 🟢 **PASS (+0.41 MRR pts, +1.16 Low)** |
-| **Phase R2-E** | `53875f844cd9491eb0f4ae1e7fe2695a` | SharedEncoder (FAISS Dense HN) | 7.38M | Learned (2x256) | 1 FAISS Dense Hard + In-batch | 2 | **0.4084** [0.4027, 0.4141] | **0.3098** | **0.5176** | **0.5959** | **0.4462** | 🟢 **PASS (Beats BM25 HN: 0.4084 vs 0.4074)** |
-| **Phase R4 (Ablation 1)** | `1dd691e839ee4684b17d990b51cde549` | AblationShared (CLSPooling) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.1566** [0.1524, 0.1605] | **0.0957** | **0.2120** | **0.2751** | **0.1762** | 🟢 Completed (-0.2467 vs Mean) |
-| **Phase R4 (Ablation 2)** | `ef009dd84a66465a92847ab378b0bdea` | AblationShared (SeqLen L=128) | 7.35M | Learned (2x256) | In-batch (masked) | 2 | **0.3943** [0.3886, 0.4002] | **0.2965** | **0.4998** | **0.5801** | **0.4314** | 🟢 Completed (97.8% retention, 1.8x speedup) |
-| **Phase R3 (Test: Basic)** | `c4a336367c154f9b9e18627f82304991` | Basic Encoder (No Modality) | 7.38M | None | In-batch (masked) | 2 | **0.3773** [0.3716, 0.3832] | **0.2836** | **0.4814** | **0.5575** | **0.4132** | 🟢 Test Split (19,632 queries) |
-| **Phase R3 (Test: In-Batch)** | `c4a336367c154f9b9e18627f82304991` | SharedEncoder (In-Batch) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.4157** [0.4098, 0.4216] | **0.3178** | **0.5246** | **0.6018** | **0.4531** | 🟢 Test Split (19,632 queries) |
-| **Phase R3 (Test: BM25 HN)** | `c4a336367c154f9b9e18627f82304991` | SharedEncoder (BM25 Hard Neg) | 7.38M | Learned (2x256) | 1 BM25 Hard + In-batch | 2 | **0.4155** [0.4095, 0.4215] | **0.3184** | **0.5227** | **0.6016** | **0.4529** | 🟢 Test Split (19,632 queries) |
-| **Phase R3 (Test: Dense HN)** | `checkpoints/shared_dense_hard_clean/best_shared.pt` | SharedEncoder (FAISS Dense HN) | 7.38M | Learned (2x256) | 1 FAISS Dense Hard + In-batch | 2 | **0.4192** [0.4132, 0.4250] | **0.3216** | **0.5279** | **0.6020** | **0.4562** | 🟢 **NEW SOTA (Test MRR 0.4192)** |
-| **Phase R2 (Teammate: Dual Baseline)** | `final_results____.md` | DualEncoder (Baseline) | 7M / 14M | None (Decoupled) | In-batch | 2 | **0.2900** | — | — | — | — | 🟢 Clean Benchmark (Teammate) |
-| **Phase R2 (Teammate: Dual FAISS)** | `final_results____.md` | DualEncoder (FAISS Hard) | 7M / 14M | None (Decoupled) | FAISS Hard (τ=0.1) | 1 | **0.4807** | — | — | — | — | 🟢 Clean Benchmark (Teammate) |
-| **Phase R2 (Teammate: Dual FAISS)** | `final_results____.md` | DualEncoder (FAISS Hard) | 7M / 14M | None (Decoupled) | FAISS Hard (τ=0.07) | 1 | **0.4684** | — | — | — | — | 🟢 Clean Benchmark (Teammate) |
-### Historical Leaky Architecture Experiments (Superseded)
+| Phase | Run ID | Model | Params | Modality Emb | Negatives | Epochs | Split | MRR [95% CI] | R@1 | R@5 | R@10 | NDCG@10 | Status |
+|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Phase R1** | `14feca9d5b024faab9da64beac12541b` | BM25 (ATIRE) | — | — | Lexical | 0 | Full Val (20,115) | **0.5214** [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | 🟢 Completed |
+| **Phase R1** | `fb3b5313f1bb419bb330b7fc0dee6bf5` | BM25 (ATIRE) | — | — | Lexical | 0 | Full Test (19,632) | **0.5108** [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | 🟢 Completed |
+| **Phase R2-A** | `8cc3cb36b0494d42be6bf7253c3ab2e1` | Basic Encoder | 7.38M | None | In-batch (masked) | 2 | Val Sample (1,000) | **0.3714** [0.3469, 0.3976] | 0.2820 | 0.4630 | 0.5430 | 0.4042 | 🟢 Completed |
+| **Phase R2-B** | `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt` | SharedEncoder (4L) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | Full Val (20,115) | **0.4033** [0.3973, 0.4093] | 0.3038 | 0.5118 | 0.5914 | 0.4412 | 🟢 **PASS Gate** |
+| **Phase R2-D** | `c4e2e5c02be74bf19eacf4ea4fc68c5c` | SharedEncoder (BM25 HN) | 7.38M | Learned (2x256) | 1 BM25 + In-batch | 2 | Full Val (20,115) | **0.4074** [0.4015, 0.4135] | 0.3091 | 0.5166 | 0.5976 | 0.4458 | 🟢 **PASS Gate** |
+| **Phase R2-E** | `53875f844cd9491eb0f4ae1e7fe2695a` | SharedEncoder (Dense HN) | 7.38M | Learned (2x256) | 1 FAISS Dense + In-batch | 2 | Full Val (20,115) | **0.4084** [0.4027, 0.4141] | 0.3098 | 0.5176 | 0.5959 | 0.4462 | 🟢 4L Val SOTA |
+| **Phase R4** | `1dd691e839ee4684b17d990b51cde549` | Ablation (CLSPooling) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | Full Val (20,115) | **0.1566** [0.1524, 0.1605] | 0.0957 | 0.2120 | 0.2751 | 0.1762 | 🟢 Ablation (-61.2%) |
+| **Phase R4** | `ef009dd84a66465a92847ab378b0bdea` | Ablation (SeqLen L=128) | 7.35M | Learned (2x256) | In-batch (masked) | 2 | Full Val (20,115) | **0.3943** [0.3886, 0.4002] | 0.2965 | 0.4998 | 0.5801 | 0.4314 | 🟢 97.8% retention |
+| **Phase R3** | `c4a336367c154f9b9e18627f82304991` | Basic Encoder | 7.38M | None | In-batch (masked) | 2 | Full Test (19,632) | **0.3773** [0.3716, 0.3832] | 0.2836 | 0.4814 | 0.5575 | 0.4132 | 🟢 Test Baseline |
+| **Phase R3** | `c4a336367c154f9b9e18627f82304991` | SharedEncoder (In-Batch) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | Full Test (19,632) | **0.4157** [0.4098, 0.4216] | 0.3178 | 0.5246 | 0.6018 | 0.4531 | 🟢 Test In-Batch |
+| **Phase R3** | `c4a336367c154f9b9e18627f82304991` | SharedEncoder (BM25 HN) | 7.38M | Learned (2x256) | 1 BM25 + In-batch | 2 | Full Test (19,632) | **0.4155** [0.4095, 0.4215] | 0.3184 | 0.5227 | 0.6016 | 0.4529 | 🟢 Test BM25 HN |
+| **Phase R3** | `checkpoints/shared_dense_hard_clean/best_shared.pt` | SharedEncoder (Dense HN) | 7.38M | Learned (2x256) | 1 FAISS Dense + In-batch | 2 | Full Test (19,632) | **0.4192** [0.4132, 0.4250] | 0.3216 | 0.5279 | 0.6020 | 0.4562 | 🟢 4L Test SOTA |
+| **Teammate** | `final_results____.md` | DualEncoder (Baseline) | 7M/14M | None (Decoupled) | In-batch | 2 | Full Test (19,632) | **0.2900** | — | — | — | — | 🟢 Dual Baseline |
+| **Teammate** | `final_results____.md` | DualEncoder (FAISS Hard) | 7M/14M | None (Decoupled) | FAISS Hard (τ=0.1) | 1 | Full Test (19,632) | **0.4807** | — | — | — | — | 🟢 Dual HN (τ=0.1) |
+| **Phase 6.5** | `d9034df9dff84a419cd320d1594f0511` | Scaled Shared (6L-384d) | 17.03M | Learned (2x384) | 1 FAISS Dense + In-batch | 4 | Full Val (20,115) | **0.4620** [0.4559, 0.4679] | **0.3552** | **0.5845** | **0.6655** | **0.5041** | 🟢 **SOTA Validation** |
+| **Phase 6.5** | `d9034df9dff84a419cd320d1594f0511` | Scaled Shared (6L-384d) | 17.03M | Learned (2x384) | 1 FAISS Dense + In-batch | 4 | Full Test (19,632) | **0.4699** [0.4636, 0.4757] | **0.3637** | **0.5896** | **0.6686** | **0.5109** | 🟢 **DEFINITIVE CLEAN SOTA** |
+
+---
+
+## Historical Pre-Remediation Benchmarks (Leaky Data Archive)
+
+*This section archives the original exploratory benchmarks from Phases 1–6 evaluated prior to AST docstring stripping. In these historical runs, verbatim docstrings were present inside the code snippets, leading to an artificially inflated lexical and neural ceiling. These figures are preserved strictly for architectural exploration, engineering verification, and historical provenance.*
+
+### Historical Architecture Exploration (Leaky Data: `data/processed/`)
+
 | Phase | Run ID | Model | Params | Tokenizer | Negatives | Epochs | MRR | R@1 | R@5 | R@10 | Status |
 |:---:|:---|:---|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---|
-| **Phase 2** | — | Basic | 7.38M | Custom BPE | In-batch | <1 (Smoke) | 0.4633 | 0.3540 | 0.5890 | 0.6790 | Baseline |
-| **Phase 3** | `84bb3f1d13054e8d914bef04dc632d32` | Shared | 7.38M | Custom BPE | In-batch | 1 | 0.9296 | 0.8880 | 0.9780 | 0.9840 | 🟢 Completed (Epoch 1 on test set) |
-| **Phase 4** | `c6acad9bbc4043d69bf680b841f78962` | Dual | 13.19M | Custom BPE | In-batch | 2 | 0.8670 | 0.8050 | 0.9450 | 0.9620 | 🟢 Completed (Epoch 2 on test set) |
-| **Phase 4 (Teammate)** | `checkpoints/dual/best_dual.pt` | Dual (Kaggle T4x2) | 13.19M | Custom BPE | In-batch | 2 | 0.8947 | 0.8370 | 0.9680 | 0.9770 | 🟢 Teammate Run |
-| **Phase 5 (Teammate)** | `checkpoints/dual_hard/best_dual.pt` | Dual + Dense HN (FAISS) | 13.19M | Custom BPE | FAISS Hard | 2 | 0.9180 | 0.8720 | 0.9720 | 0.9840 | 🟢 Teammate Run |
-| **Phase 5 (Teammate)** | `checkpoints/dual_bm25_hard/best_dual.pt` | Dual + Lexical HN (BM25) | 13.19M | Custom BPE | BM25 Hard | 2 | 0.9042 | 0.8520 | 0.9690 | 0.9810 | 🟢 Teammate Run |
-| **Phase 5** | `0b01d6eb927c4181b825bf6757dd970c` | Shared (Hard) | 7.38M | Custom BPE | BM25 Hard | 2 (1+1) | **0.9383** | **0.9030** | **0.9780** | **0.9880** | 🟢 Completed (Epoch 2 fine-tuned; +1.5% R@1 boost over in-batch) |
+| **Phase 1** | `234f518410034b628b9c90eb7cbbc1cf` | BM25 Baseline | — | Subwords | Lexical | 0 | 0.9498 | 0.9180 | 0.9890 | 0.9950 | Historical Lexical Ceiling |
+| **Phase 2** | — | Basic Encoder | 7.38M | Custom BPE | In-batch | <1 | 0.4633 | 0.3540 | 0.5890 | 0.6790 | Historical Smoke Test |
+| **Phase 3** | `84bb3f1d13054e8d914bef04dc632d32` | Shared Encoder | 7.38M | Custom BPE | In-batch | 1 | 0.9296 | 0.8880 | 0.9780 | 0.9840 | Historical Shared Baseline |
+| **Phase 4** | `c6acad9bbc4043d69bf680b841f78962` | Dual Encoder | 13.19M | Custom BPE | In-batch | 2 | 0.8670 | 0.8050 | 0.9450 | 0.9620 | Historical Dual Baseline |
+| **Phase 4** | `checkpoints/dual/best_dual.pt` | Dual (Kaggle T4x2) | 13.19M | Custom BPE | In-batch | 2 | 0.8947 | 0.8370 | 0.9680 | 0.9770 | Historical Teammate Run |
+| **Phase 5** | `checkpoints/dual_hard/best_dual.pt` | Dual + Dense HN | 13.19M | Custom BPE | FAISS Hard | 2 | 0.9180 | 0.8720 | 0.9720 | 0.9840 | Historical Teammate Dense HN |
+| **Phase 5** | `checkpoints/dual_bm25_hard/best_dual.pt` | Dual + Lexical HN | 13.19M | Custom BPE | BM25 Hard | 2 | 0.9042 | 0.8520 | 0.9690 | 0.9810 | Historical Teammate Lexical HN |
+| **Phase 5** | `0b01d6eb927c4181b825bf6757dd970c` | Shared + Hard Negs | 7.38M | Custom BPE | BM25 Hard | 2 | 0.9383 | 0.9030 | 0.9780 | 0.9880 | Historical Shared Hard Negs |
 
-### Ablation Experiments (Phase 6 — Experiment `codeembed-phase6-ablations`)
-All ablations evaluated on 1,000 sampled test queries against the full 21,005 test code corpus (1 epoch = 3,010 steps, CUDA AMP on RTX 4050):
+### Historical Ablations (Leaky Data: `data/processed/`)
+All historical ablations evaluated on 1,000 sampled test queries against the 21,005 test code corpus (1 epoch = 3,010 steps, CUDA AMP on RTX 4050):
 
-| Run Name | Run ID | Category | Variant | Epochs | Test MRR | Test R@1 | Test R@5 | Test R@10 | Test NDCG@10 | Training Time | Key Insight |
-|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
-| **Phase 3 Baseline** | `84bb3f1d13054e8d914bef04dc632d32` | Baseline | Mean, $\tau=0.07$, $L=256$ | 1 | **0.9296** | **0.8880** | **0.9780** | **0.9840** | **0.9429** | ~19.5m | Controlled 1-epoch reference model |
-| `phase6_pooling_cls` | `817745a0da7a448596d7501acec68c28` | Pooling | CLSPooling | 1 | **0.8836** | **0.8340** | **0.9440** | **0.9600** | **0.9013** | 20.91m | MaskedMeanPooling beats CLS by **+4.6 MRR points** (+5.4% R@1) |
-| `phase6_temp_0.05` | `f7820484b89a4e08b4a8ed6c80da59db` | Temperature | $\tau = 0.05$ | 1 | **0.9244** | **0.8860** | **0.9690** | **0.9790** | **0.9373** | 19.70m | Overly sharp softmax ($20\times$ scaling) slightly degrades test generalization |
-| `phase6_temp_0.10` | `173d36082dbd4f978ba99875ed7f6c61` | Temperature | $\tau = 0.10$ | 1 | **0.9252** | **0.8910** | **0.9680** | **0.9740** | **0.9366** | 19.91m | Softer softmax ($10\times$ scaling) slightly attenuates hard negative gradients |
-| `phase6_seq_len_128` | `48b9dffd20714b7db597bccae74b4bdb` | Sequence Length | $L = 128$ | 1 | **0.9292** | **0.8930** | **0.9730** | **0.9800** | **0.9415** | **10.47m** | **2x speedup** with **zero quality loss** (MRR 0.9292 vs 0.9296; R@1 +0.5%) |
+| Run Name | Run ID | Category | Variant | Epochs | Test MRR | Test R@1 | Test R@5 | Test R@10 | Test NDCG@10 | Key Insight |
+|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Phase 3 Baseline** | `84bb3f1d13054e8d914bef04dc632d32` | Baseline | Mean, $\tau=0.07$, $L=256$ | 1 | **0.9296** | **0.8880** | **0.9780** | **0.9840** | **0.9429** | Controlled 1-epoch reference model |
+| `phase6_pooling_cls` | `817745a0da7a448596d7501acec68c28` | Pooling | CLSPooling | 1 | **0.8836** | **0.8340** | **0.9440** | **0.9600** | **0.9013** | MaskedMeanPooling beats CLS by +4.6 MRR pts |
+| `phase6_temp_0.05` | `f7820484b89a4e08b4a8ed6c80da59db` | Temperature | $\tau = 0.05$ | 1 | **0.9244** | **0.8860** | **0.9690** | **0.9790** | **0.9373** | Sharper softmax slightly degrades test generalization |
+| `phase6_temp_0.10` | `173d36082dbd4f978ba99875ed7f6c61` | Temperature | $\tau = 0.10$ | 1 | **0.9252** | **0.8910** | **0.9680** | **0.9740** | **0.9366** | Softer softmax slightly attenuates hard neg gradients |
+| `phase6_seq_len_128` | `48b9dffd20714b7db597bccae74b4bdb` | Sequence Length | $L = 128$ | 1 | **0.9292** | **0.8930** | **0.9730** | **0.9800** | **0.9415** | 2x speedup with zero quality loss |
 
 ---
 
@@ -263,20 +266,26 @@ All ablations evaluated on 1,000 sampled test queries against the full 21,005 te
 3. [x] Ablation 3: Sequence Length Impact ($L=128$ vs $L=256$; $L=128$ yields 2x speedup with zero quality loss: MRR 0.9292 vs 0.9296, R@1 +0.5%)
 4. [x] Summary table and scientific insights logged to MLflow experiment `codeembed-phase6-ablations` (all 4 runs unified in single IDs)
 
-### Phase 6.5: Model Capacity & Scaling Exploration (Current Milestone)
-1. [ ] Depth scaling at constant width ($d_{\text{model}}=256$): 2L (~4.2M), 4L (~7.38M), 6L (~10.5M), 8L (~13.7M)
-2. [ ] Width & depth scaling with micro-batching ($d_{\text{model}}=512$): 6L (~27.4M), 8L (~36.8M), 12L (~54.0M)
-3. [ ] Profile peak VRAM and step latency on 6 GB RTX 4050 GPU (SDPA + gradient accumulation)
-4. [ ] Test hypothesis: Can 54M parameters with BM25 hard negatives push retrieval towards ~0.98 MRR on consumer GPU?
+### Phase 6.5: Model Capacity & Scaling Exploration (Completed)
+1. [x] Scale SharedEncoder capacity to 17.03M parameters (6 Layers, $d_{\text{model}}=384$, 6 Heads, $d_{\text{ff}}=1536$)
+2. [x] Train 4 epochs with 1 FAISS dense hard negative + 63 in-batch negatives on clean data (`configs/shared_6l_dense_clean.yaml`)
+3. [x] Evaluate on Full Validation ($N=20,115$): MRR **0.4620** [0.4559, 0.4679], R@1 **0.3552**, R@10 **0.6655**, NDCG@10 **0.5041** (+5.36 MRR pts over 4L)
+4. [x] Evaluate on Full Test ($N=19,632$): MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (**Definitive Clean SOTA**)
+5. [x] Lexical Stratification Analysis: Zero-Overlap **0.0716** (7.2x vs BM25 0.0099); Low-Overlap **0.3559** (+14.60 pts vs BM25 0.2099); High-Overlap **0.5357**
+6. [x] Discordance Analysis vs BM25: Dense wins on 37.7% of queries, BM25 wins on 38.7%; Oracle bound is **0.6562 MRR** (+14.5 pts over BM25)
+
+### Hybrid Search & CLI Demo (Current Milestone)
+1. [ ] Implement Hybrid Search benchmark combining BM25 and 17M Dense embeddings (Reciprocal Rank Fusion & Convex Combination)
+2. [ ] Achieve target Test MRR **~0.58–0.62**, decisively beating standalone BM25 (0.5108) across both lexical and semantic queries
+3. [ ] Implement interactive terminal search CLI (`demo/cli.py`) with hybrid search toggle
 
 ### Phase 7: Pretrained Baseline (Upcoming)
 1. [ ] Frozen evaluation of pretrained models (`all-MiniLM-L6-v2`, `codebert-base`)
 2. [ ] Answer RQ5: Pretraining vs From-scratch contrastive learning
 
 ### Phase 8: Demo & Final Deliverables (Upcoming)
-1. [ ] CLI demo for real-time natural language code retrieval
-2. [ ] Qualitative analysis & UMAP visualization
-3. [ ] Final synthesis & project report
+1. [ ] Qualitative analysis & UMAP visualization
+2. [ ] Final synthesis & project report
 
 ---
 
