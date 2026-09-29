@@ -732,6 +732,12 @@ All docstrings have been removed from the code documents via coordinate AST byte
 #### RQ4: Do hard negatives improve retrieval?
 * **Answer**: **Yes, with targeted impact**. In the confirmatory benchmark, BM25 hard negatives maintain parity overall (0.4155 vs 0.4157) while providing targeted lift on low-overlap semantic queries (0.3204 vs 0.3174). In exploratory iterations, FAISS dense hard negatives lift 4L Shared Encoder test MRR to **0.4192** and help bridge decoupled spaces in Dual Encoders, though post-R3 test-set evaluations are exploratory and subject to model selection bias.
 
+#### RQ5: How does a small from-scratch model compare to established pretrained representations?
+* **Answer**: **Small from-scratch models provide competitive domain-specific semantic retrieval while revealing critical foundational properties of contrastive learning**:
+  1. **From-Scratch (7.38M Confirmatory: 0.4157 MRR, 17.03M Exploratory: 0.4699 MRR)**: Without any pretraining on massive web text, training from scratch on clean CodeSearchNet learns robust semantic mappings, beating BM25 by **+11.05 to +14.60 MRR points** on low-overlap queries.
+  2. **The Anisotropy Failure of Foundation MLMs (`codebert-base`, 125M: 0.0138 MRR)**: Foundation models pre-trained solely with Masked Language Modeling (MLM) fail catastrophic out-of-the-box evaluation because their representations suffer from extreme anisotropy (the "cone effect" where embeddings cluster in a narrow directional subspace with pairwise cosine similarity $> 0.95$). This proves empirically why bi-encoder contrastive training is strictly required for dense retrieval.
+  3. **The Power of Pretrained Contrastive Scale (`all-MiniLM-L6-v2`, 22.7M: 0.5837 MRR & `jina-embeddings-v2-base-code`, 161M: 0.8294 MRR)**: Models pre-trained with hundreds of millions of contrastive pairs bridge both worlds: MiniLM-L6-v2 matches BM25 on exact keyword queries ($0.6625$) while dominating on semantic queries ($0.4451$), and Jina's 2024 code SOTA achieves $0.8294$ MRR across all strata.
+
 ---
 
 ### 11.3 Top Portfolio & Interview Questions from Phase 0–4

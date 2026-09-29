@@ -77,12 +77,19 @@ Repo: pallets/flask | File: flask/helpers.py
 > └────────────────────────────────────────────────────────────────────────────────────────┘
 > ```
 >
-> *(Placeholder for UI screenshot asset: `docs/assets/sample_ui_mockup.png`)*
-<!-- SAMPLE_UI_PREVIEW_END -->
-
-To launch the interactive CLI search interface:
+To launch the interactive Web Search UI (FastAPI + Modern Tailwind Interface):
 ```bash
-uv run python -m demo.cli --checkpoint checkpoints/shared_6l_dense_clean/best_shared.pt --query "parse yaml file with safe loader"
+uv run python demo/app.py
+# Open http://127.0.0.1:8000 in your browser
+```
+
+Or run the interactive terminal search engine:
+```bash
+# Interactive REPL mode
+uv run python demo/search.py --interactive
+
+# Single query execution
+uv run python demo/search.py --query "calculate md5 hash of string" --mode hybrid --top-k 5
 ```
 
 ---
@@ -145,6 +152,26 @@ In production software engineering search, exact keyword matches and semantic co
 | **Dual Encoder Baseline** | 14M | 2 | Test | **0.2900** | — | — | Independent teammate baseline (no weight sharing). |
 | **Dual Encoder (FAISS HN, $\tau=0.10$)** | 14M | 1 | Test | **0.4807** | — | — | Evaluated on test; test-selected hyperparameter. |
 | **Dual Encoder (FAISS HN, $\tau=0.07$)** | 14M | 1 | Test | **0.4684** | — | — | Evaluated on test; test-selected hyperparameter. |
+
+### 5. Pretrained Baseline Benchmark Suite (RQ5)
+To situate from-scratch models within the broader landscape of modern representation learning, three leading pretrained models were evaluated under identical Protocol v1.1 evaluation conditions ($N = 19,632$ clean test queries, max seq len 256, harmonic ranks):
+
+| Model Architecture | Parameters | Pretraining Domain & Scale | Full Test MRR [95% CI] | Recall@1 | Recall@10 | Zero-Overlap MRR | Low-Overlap MRR | High-Overlap MRR |
+| :--- | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **BM25 (ATIRE)** | 0 | None (Exact Lexical Inverted Index) | **0.5108** [0.505, 0.517] | 0.4052 | 0.6993 | 0.0099 | 0.2099 | 0.6625 |
+| **CodeEmbed 4L Shared (Confirmatory)** | 7.38M | Clean CodeSearchNet (Scratch) | **0.4157** [0.410, 0.422] | 0.3178 | 0.6018 | 0.0487 | 0.3204 | 0.4716 |
+| **CodeEmbed 17M Scaled (Exploratory)\*** | 17.03M | Clean CodeSearchNet + FAISS HN | **0.4699** [0.464, 0.476] | 0.3637 | 0.6686 | 0.0716 | 0.3559 | 0.5357 |
+| **`all-MiniLM-L6-v2`** | 22.7M | 1B Sentence Pairs (General Contrastive) | **0.5837** [0.578, 0.589] | 0.4698 | 0.7912 | 0.1314 | 0.4451 | 0.6625 |
+| **`microsoft/codebert-base`** | 125M | GitHub 6 PLs (Masked Language Model) | **0.0138** [0.013, 0.015] | 0.0071 | 0.0242 | 0.0019 | 0.0087 | 0.0165 |
+| **`jina-embeddings-v2-base-code`** | 161M | Multi-language Code Contrastive (2024 SOTA) | **0.8294** [0.825, 0.834] | 0.7590 | 0.9444 | 0.3390 | 0.7674 | 0.8762 |
+
+> #### 🔬 Scientific Findings & Key Takeaways:
+> 1. **The Representation Degeneration Failure of Raw MLMs (`codebert-base`, MRR 0.0138)**:
+>    Foundational masked language models (MLMs) like CodeBERT are trained to reconstruct masked tokens, not to produce uniform sentence/code embeddings. Their un-tuned CLS representations suffer from extreme **representation collapse (anisotropy / the cone effect)**, where pairwise cosine similarities between arbitrary documents cluster above 0.95. This empirically proves that raw pre-trained foundation models cannot be used as bi-encoders out of the box without explicit contrastive fine-tuning.
+> 2. **Pretrained Capacity Peer (`all-MiniLM-L6-v2`, MRR 0.5837)**:
+>    MiniLM-L6-v2 possesses almost identical parameter count (22.7M vs 17.0M) and layer depth (6L) to our scaled encoder. Benefiting from 1 billion sentence pairs of contrastive pre-training, it matches BM25 on high-overlap queries ($0.6625$) while outperforming BM25 by **+23.52 MRR points** on low-overlap queries ($0.4451$ vs $0.2099$).
+> 3. **Modern Code SOTA (`jina-embeddings-v2-base-code`, MRR 0.8294)**:
+>    Jina's dedicated 161M code model sets the empirical ceiling on this benchmark, achieving 94.4% Recall@10 and scoring **0.3390 MRR on zero-overlap queries** where BM25 completely fails (0.0099).
 
 ---
 

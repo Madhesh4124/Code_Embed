@@ -33,7 +33,8 @@
 | *Exploratory*: Shared FAISS Dense HN (4L) | 🔵 Exploratory | 2026-09-28 | Post-R3 exploratory iteration: Val MRR **0.4084** [0.4027, 0.4141], Test MRR **0.4192** [0.4132, 0.4250] (unprotected from test selection bias). |
 | *Exploratory*: Phase 6.5 Model Scaling (17.03M) | 🔵 Exploratory | 2026-09-29 | Post-R3 exploratory capacity scaling: 6L-384d Shared Encoder trained 4 epochs with FAISS dense HN. Full Val MRR **0.4620** [0.4559, 0.4679], Full Test MRR **0.4699** [0.4636, 0.4757]. MLflow Run `d9034df9dff84a419cd320d1594f0511`. |
 | *Exploratory*: Dual Encoder (Teammate Track) | 🔵 Exploratory | 2026-09-28 | Independent handover: Dual baseline Test MRR **0.2900** (7M, decoupled); Dual with FAISS hard negatives evaluated at two temperatures on test: **0.4807** (τ=0.10) and **0.4684** (τ=0.07). Unprotected from test selection bias. |
-| Hybrid Search (Dense + BM25) & CLI Demo | ⬜ Next Action | 2026-09-29 | Empirical evaluation of Reciprocal Rank Fusion / Convex Combination + interactive CLI search demo (`demo/cli.py`). |
+| Pretrained Baseline Suite (RQ5) | 🟢 Completed | 2026-09-29 | Evaluated `all-MiniLM-L6-v2` (0.5837), `codebert-base` (0.0138 - anisotropy collapse), and `jina-embeddings-v2-base-code` (0.8294 SOTA) on clean test ($N=19,632$). |
+| Interactive Demo & UI (Web & CLI) | 🟢 Completed | 2026-09-29 | Implemented FastAPI web UI (`demo/app.py`) and CLI search REPL (`demo/search.py`) with Hybrid RRF, Dense, BM25 modes, and overlap stratum badges. |
 
 
 ---

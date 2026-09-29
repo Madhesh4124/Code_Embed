@@ -753,6 +753,51 @@ Why does standalone BM25 retain a +4.09 MRR advantage overall despite the dense 
    * **Oracle Upper Bound (Best of Either)**: **0.6562 MRR** (an immense **+14.54 MRR point gain** over standalone BM25).
 4. **Empirical Takeaway**: In production IR, pure dense models are not deployed in isolation for code. Combining BM25 with our Dense Encoder via Reciprocal Rank Fusion (RRF) or score interpolation is motivated by this high discordance, allowing each retriever to cover the other's failure modes.
 
+---
 
+### 12.10 Pretrained Baseline Benchmark Suite & RQ5 Investigation (Complete)
 
+To address **Research Question 5 (RQ5)** and situate from-scratch models within the broader landscape of modern representation learning, three leading pretrained models were evaluated under identical Protocol v1.1 evaluation conditions ($N = 19,632$ clean test queries, max seq len 256, exact harmonic ranks):
 
+1. **`sentence-transformers/all-MiniLM-L6-v2`** (~22.7M parameters, 384d, 6L) — Direct architecture and capacity peer.
+2. **`microsoft/codebert-base`** (~125M parameters, 768d, 12L) — Classical GitHub code-domain masked language model baseline.
+3. **`jinaai/jina-embeddings-v2-base-code`** (~161M parameters, 768d) — Modern 2024 SOTA code embedding bi-encoder.
+
+#### 1. Full Benchmark Comparison Table ($N = 19,632$ Test Queries vs. 19,632 Corpus)
+
+| Model Architecture | Parameters | Pretraining Domain & Scale | Full Test MRR [95% CI] | Recall@1 | Recall@10 | Zero-Overlap MRR | Low-Overlap MRR | High-Overlap MRR |
+| :--- | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **BM25 (ATIRE Reference)** | 0 | None (Exact Lexical Inverted Index) | **0.5108** [0.505, 0.517] | 0.4052 | 0.6993 | 0.0099 | 0.2099 | 0.6625 |
+| **CodeEmbed 4L Shared (Confirmatory)** | 7.38M | Clean CodeSearchNet (From Scratch) | **0.4157** [0.410, 0.422] | 0.3178 | 0.6018 | 0.0487 | 0.3204 | 0.4716 |
+| **CodeEmbed 17M Scaled (Exploratory)\*** | 17.03M | Clean CodeSearchNet + FAISS Dense HN | **0.4699** [0.464, 0.476] | 0.3637 | 0.6686 | 0.0716 | 0.3559 | 0.5357 |
+| **`all-MiniLM-L6-v2`** | 22.7M | 1B Sentence Pairs (General Contrastive) | **0.5837** [0.578, 0.589] | 0.4698 | 0.7912 | 0.1314 | 0.4451 | 0.6625 |
+| **`microsoft/codebert-base`** | 125M | GitHub 6 PLs (Masked Language Model) | **0.0138** [0.013, 0.015] | 0.0071 | 0.0242 | 0.0019 | 0.0087 | 0.0165 |
+| **`jina-embeddings-v2-base-code`** | 161M | Multi-language Code Contrastive (2024 SOTA) | **0.8294** [0.825, 0.834] | 0.7590 | 0.9444 | 0.3390 | 0.7674 | 0.8762 |
+
+#### 2. Key Scientific Findings & Analysis
+
+1. **The Representation Collapse of Raw MLMs (`codebert-base`, MRR 0.0138)**:
+   Foundational masked language models (MLMs) like CodeBERT are trained to predict masked tokens, which optimizes local token context but does not structure the overall sentence/code embedding space. Without contrastive fine-tuning, the CLS token suffers from severe **representation degeneration (anisotropy / the cone effect)**: all representations cluster in a narrow geometric cone with average pairwise cosine similarities $> 0.95$. This provides decisive empirical proof that foundation models cannot be used as bi-encoders out-of-the-box without contrastive training objectives (like our CodeEmbed pipeline).
+2. **Pretrained Capacity Peer (`all-MiniLM-L6-v2`, MRR 0.5837)**:
+   `all-MiniLM-L6-v2` is the exact architectural peer to our scaled 6L model (22.7M vs 17.0M parameters, 6 layers, 384d). Benefiting from 1 billion pairs of contrastive pre-training, it matches BM25 on high-overlap queries ($0.6625$) while outperforming BM25 by **+23.52 MRR points** on low-overlap queries ($0.4451$ vs $0.2099$).
+3. **Modern Code SOTA (`jina-embeddings-v2-base-code`, MRR 0.8294)**:
+   Jina's 161M parameter model trained specifically on code representation learning sets the benchmark ceiling, achieving 94.4% Recall@10 and scoring **0.3390 MRR on zero-overlap queries** where BM25 completely fails ($0.0099$).
+
+---
+
+### 12.11 Interactive Search Demo & UI Implementation (Complete)
+
+To make CodeEmbed search accessible and testable in production environments, two interactive demo interfaces were implemented:
+
+1. **Interactive Web Application (`demo/app.py`)**:
+   - Built on **FastAPI** with a responsive **Tailwind CSS + Highlight.js** dark-themed UI.
+   - Dynamic model switching: CodeEmbed 6L (17M Scaled), CodeEmbed 4L (7.38M Confirmatory), and `all-MiniLM-L6-v2` (22.7M Pretrained).
+   - Dynamic retrieval mode switching: Hybrid (RRF), Dense Semantic, and BM25 Lexical.
+   - Real-time token Jaccard overlap badges (Zero-Overlap, Low-Overlap, High-Overlap).
+   - Syntax-highlighted Python snippets with copy-to-clipboard buttons and search latency counters.
+   - Launch: `uv run python demo/app.py` -> Open `http://127.0.0.1:8000`.
+
+2. **Terminal Search Engine (`demo/search.py`)**:
+   - Rich-powered CLI search tool supporting single-shot execution or interactive REPL mode.
+   - Cached corpus embeddings (`data/cache/corpus_emb_shared_6l.npy`) for sub-second retrieval.
+   - Launch: `uv run python demo/search.py --interactive` or `uv run python demo/search.py --query "calculate md5 hash of string" --mode hybrid`.

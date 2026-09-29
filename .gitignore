@@ -23,8 +23,10 @@ checkpoints/
 *.pt
 *.pth
 *.bin
+*.npy
 indices/
 *.faiss
+data/cache/
 
 # Experiment Tracking
 mlruns/
