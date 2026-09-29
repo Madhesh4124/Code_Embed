@@ -733,12 +733,14 @@ To determine whether the model is limited by architecture capacity or data quali
 
 #### 3. Stratum-by-Stratum Breakdown vs. Standalone BM25 ($N = 19,632$ Test Queries)
 
-| Lexical Overlap Stratum | % of Test Set | Query Count | BM25 MRR | 4L Dense MRR | 17M Dense MRR* | Dense vs BM25 Advantage |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Zero Overlap** ($c = 0.0$) | **2.73%** | 535 | 0.0099 | 0.0486 | **0.0716** | 🚀 **Dense ($7.2\times$ over BM25)** |
-| **Low Overlap** ($0 < c \le 0.30$) | **29.58%** | 5,808 | 0.2099 | 0.3048 | **0.3559** | 🚀 **Dense (+14.60 MRR pts)** |
-| **High Overlap** ($c > 0.30$) | **67.69%** | 13,289 | **0.6625** | 0.4841 | **0.5357** | 📉 BM25 (+12.68 MRR pts) |
-| **OVERALL DATASET** | **100.0%** | 19,632 | **0.5108** | 0.4192 | **0.4699** | BM25 (+4.09 MRR pts) |
+| Lexical Overlap Stratum | % of Test Set | Query Count | BM25 MRR | 4L Confirmatory MRR | 17M Exploratory MRR* | 17M vs. BM25 Delta | 17M Exploratory Verdict |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Zero Overlap** ($c = 0.0$) | **2.73%** | 535 | 0.0099 | 0.0487 | **0.0716** | **+0.0617** | 🚀 **Dense ($7.2\times$ over BM25)** |
+| **Low Overlap** ($0 < c \le 0.30$) | **29.58%** | 5,808 | 0.2099 | 0.3204 | **0.3559** | **+0.1460** | 🚀 **Dense (+14.60 MRR pts)** |
+| **High Overlap** ($c > 0.30$) | **67.69%** | 13,289 | **0.6625** | 0.4716 | **0.5357** | **-0.1268** | 📉 BM25 (+12.68 MRR pts) |
+| **OVERALL DATASET** | **100.0%** | 19,632 | **0.5108** | 0.4157 | **0.4699** | **-0.0409** | 📉 **BM25 (+4.09 MRR pts)** |
+
+*\*Unprotected from model selection bias (evaluated on test during exploratory capacity scaling).*
 
 #### 4. Discordance Analysis & The Hybrid Search Solution
 Why does standalone BM25 retain a +4.09 MRR advantage overall despite the dense model dominating semantic queries?

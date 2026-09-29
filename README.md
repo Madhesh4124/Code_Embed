@@ -100,16 +100,31 @@ Evaluated strictly once on the clean test split ($N = 19,632$ queries against 19
 | **Shared Encoder (BM25 HN)** | 7.38M | 1 BM25 HN + In-Batch | Full Test | **0.4155** [0.4095, 0.4215] | 0.3184 | 0.5227 | 0.6016 | 0.4529 |
 
 ### 2. Lexical Overlap Stratification ($N = 19,632$ Test Queries)
-Why does standalone BM25 retain a higher overall MRR (0.5108 vs 0.4157) despite the dense model dominating semantic retrieval? Stratifying by query-code surface token overlap ($c$) explains the phenomenon:
+Why does standalone BM25 retain a higher overall MRR than neural encoders on the overall dataset despite neural models dominating semantic retrieval? Stratifying by query-code surface token overlap ($c$) isolates where each retrieval paradigm excels.
 
-| Overlap Stratum | % of Split | Query Count | BM25 MRR | 4L Dense MRR | 17M Dense MRR* | Dense vs. BM25 Advantage |
+#### Table 2A: Confirmatory Benchmark — 4L Shared Encoder (7.38M) vs. BM25
+*Pre-registered protocol evaluation conducted strictly once on test ($N=19,632$ queries). Deliberately protected from model selection bias.*
+
+| Overlap Stratum | % of Split | Query Count | BM25 MRR | 4L Shared MRR (Confirmatory) | Confirmatory Delta (4L − BM25) | Paradigm Verdict |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Zero-Overlap ($c = 0.0$)** | 2.73% | 535 | 0.0099 | 0.0487 | **0.0716** | 🚀 **Dense ($7.2\times$ over BM25)** |
-| **Low-Overlap ($0 < c \le 0.30$)** | 29.58% | 5,808 | 0.2099 | 0.3204 | **0.3559** | 🚀 **Dense (+14.60 MRR pts)** |
-| **High-Overlap ($c > 0.30$)** | 67.69% | 13,289 | **0.6625** | 0.4716 | 0.5357 | 📉 BM25 (+12.68 MRR pts) |
-| **OVERALL DATASET** | 100.0% | 19,632 | **0.5108** | 0.4157 | 0.4699 | BM25 (+4.09 MRR pts) |
+| **Zero-Overlap ($c = 0.0$)** | 2.73% | 535 | 0.0099 | **0.0487** | **+0.0388** | 🚀 **Dense ($4.9\times$ over BM25)** |
+| **Low-Overlap ($0 < c \le 0.30$)** | 29.58% | 5,808 | 0.2099 | **0.3204** | **+0.1105** | 🚀 **Dense (+11.05 MRR pts)** |
+| **High-Overlap ($c > 0.30$)** | 67.69% | 13,289 | **0.6625** | 0.4716 | **-0.1909** | 📉 BM25 (+19.09 MRR pts) |
+| **OVERALL DATASET** | 100.0% | 19,632 | **0.5108** | 0.4157 | **-0.0951** | 📉 **BM25 (+9.51 MRR pts)** |
 
-*\*Reported for exploratory reference (evaluated post-R3 during capacity scaling).*
+> **Key Confirmatory Finding**: The 4L Shared Encoder outperforms BM25 on all semantic queries (low and zero overlap, ~32.3% of the dataset), but BM25's exact inverted index wins on high-overlap queries (67.7% of the dataset), resulting in a net **-9.51 MRR point gap** overall for the 4L baseline ($0.4157$ vs $0.5108$).
+
+#### Table 2B: Post-Protocol Exploratory Iteration — Scaled 17.03M Shared Encoder vs. BM25
+*Exploratory capacity scaling (6L-384d, 4 epochs, FAISS dense hard negatives); evaluated post-R3 during model development and unprotected from model selection bias.*
+
+| Overlap Stratum | % of Split | Query Count | BM25 MRR | 17M Scaled MRR (Exploratory)* | Exploratory Delta (17M − BM25) | Exploratory Verdict |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Zero-Overlap ($c = 0.0$)** | 2.73% | 535 | 0.0099 | **0.0716** | **+0.0617** | 🚀 **Dense ($7.2\times$ over BM25)** |
+| **Low-Overlap ($0 < c \le 0.30$)** | 29.58% | 5,808 | 0.2099 | **0.3559** | **+0.1460** | 🚀 **Dense (+14.60 MRR pts)** |
+| **High-Overlap ($c > 0.30$)** | 67.69% | 13,289 | **0.6625** | 0.5357 | **-0.1268** | 📉 BM25 (+12.68 MRR pts) |
+| **OVERALL DATASET** | 100.0% | 19,632 | **0.5108** | 0.4699 | **-0.0409** | 📉 **BM25 (+4.09 MRR pts)** |
+
+*\*Unprotected from model selection bias (evaluated on test during exploratory capacity scaling).*
 
 ### 3. Discordance Analysis & The Case for Hybrid Search
 Analyzing query-level ranking discordance between the 17.03M Dense Encoder and BM25 reveals nearly orthogonal error profiles:
@@ -292,7 +307,7 @@ uv run python -m data.pretokenize
 # Evaluate clean BM25 ATIRE baseline
 uv run python scripts/run_baseline.py --config configs/baseline.yaml
 
-# Train Shared Encoder with in-batch negatives (Phase R2-B)
+# Train Shared Encoder with in-batch negatives (Phase R3 Shared Pilot — Protocol §3.3)
 uv run python scripts/run_shared.py --config configs/shared_clean.yaml
 
 # Mine BM25 hard negatives
