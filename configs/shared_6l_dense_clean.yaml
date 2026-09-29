@@ -1,14 +1,15 @@
-# Configuration for Shared Encoder with FAISS Dense Hard Negatives (Clean R-Track)
-# 1 mined FAISS dense hard negative + in-batch negatives
-# Recipe: LR = 5.0e-4, Temperature = 0.05, 2 Epochs
+# Configuration for Phase 6.5: Model Capacity Scaling (17.0M Shared Encoder)
+# Architecture: 6 Layers, d_model = 384, 6 Heads (d_k = 64), d_ff = 1536
+# Trained with 1 mined FAISS dense hard negative + in-batch negatives for 4 epochs
+# Batch size = 64 (5.46 GB peak VRAM on RTX 4050 6GB GPU)
 
 model:
   name: "shared"
   vocab_size: 16000
-  d_model: 256
-  n_layers: 4
-  n_heads: 8
-  d_ff: 1024
+  d_model: 384
+  n_layers: 6
+  n_heads: 6
+  d_ff: 1536
   max_seq_len: 256
   dropout: 0.1
   num_modalities: 2
@@ -20,25 +21,25 @@ data:
   tokenizer_path: "tokenizer/tokenizer.json"
   hard_negatives_file: "data/processed_clean_v2/train_dense_hard_negatives.pt"
   num_hard_negatives: 1
-  batch_size: 128
+  batch_size: 64
   num_workers: 0
   pin_memory: true
 
 training:
-  lr: 5.0e-4
+  lr: 3.5e-4
   weight_decay: 0.01
   grad_clip: 1.0
   temperature: 0.05
-  epochs: 2
+  epochs: 4
   warmup_ratio: 0.10
-  log_every_steps: 50
-  val_every_steps: 500
+  log_every_steps: 100
+  val_every_steps: 1000
   seed: 42
 
-checkpoint_dir: "checkpoints/shared_dense_hard_clean"
+checkpoint_dir: "checkpoints/shared_6l_dense_clean"
 
 mlflow:
   tracking_uri: "sqlite:///mlflow.db"
   experiment_name: "codeembed-clean-baselines"
-  run_name: "shared-encoder-dense-hard-clean"
+  run_name: "shared-encoder-6l-384d-dense-clean"
 

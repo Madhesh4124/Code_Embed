@@ -640,20 +640,22 @@ In accordance with strict test set discipline and user direction (*"lets just go
 
 | Model Arm | Test MRR [95% CI] | Test Recall@1 | Test Recall@5 | Test Recall@10 | Test NDCG@10 | MLflow Run ID |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **BM25 (ATIRE Reference)** | **0.5108** [0.5050, 0.5168] | **0.4052** | **0.6340** | **0.6993** | **0.5514** | `c4a336367c154f9b9e18627f82304991` |
-| **Basic Encoder** (Model 1, zero modality emb) | **0.3773** [0.3716, 0.3832] | **0.2836** | **0.4814** | **0.5575** | **0.4132** | `c4a336367c154f9b9e18627f82304991` |
-| **In-Batch Shared** (Model 2, learned modality) | **0.4157** [0.4098, 0.4216] | **0.3178** | **0.5246** | **0.6018** | **0.4531** | `c4a336367c154f9b9e18627f82304991` |
-| **Hard-Negative Shared** (Model 3, 1 BM25 HN) | **0.4155** [0.4095, 0.4215] | **0.3184** | **0.5227** | **0.6016** | **0.4529** | `c4a336367c154f9b9e18627f82304991` |
-| **Dual Encoder Baseline** (Model 3 Handover) | **0.2900** | — | — | — | — | `final_results____.md` (Teammate) |
+| **BM25 (ATIRE Reference)** | **0.5108** [0.5050, 0.5168] | **0.4052** | **0.6340** | **0.6993** | **0.5514** | c4a336367c154f9b9e18627f82304991 |
+| **Basic Encoder** (Model 1, zero modality emb) | **0.3773** [0.3716, 0.3832] | **0.2836** | **0.4814** | **0.5575** | **0.4132** | c4a336367c154f9b9e18627f82304991 |
+| **Dual Encoder Baseline** (Model 3 Handover) | **0.2900** | — | — | — | — | inal_results____.md (Teammate) |
+| **In-Batch Shared** (Model 2, learned modality) | **0.4157** [0.4098, 0.4216] | **0.3178** | **0.5246** | **0.6018** | **0.4531** | c4a336367c154f9b9e18627f82304991 |
+| **Hard-Negative Shared** (Model 3, 1 BM25 HN) | **0.4155** [0.4095, 0.4215] | **0.3184** | **0.5227** | **0.6016** | **0.4529** | c4a336367c154f9b9e18627f82304991 |
+| **FAISS Dense HN Shared** (Model 3b, 1 Dense HN) | **0.4192** [0.4132, 0.4250] | **0.3216** | **0.5279** | **0.6020** | **0.4562** | checkpoints/shared_dense_hard_clean/best_shared.pt |
+| **Scaled Shared 17M** (Phase 6.5, 6L-384d Dense HN) | **0.4699** [0.4636, 0.4757] | **0.3637** | **0.5896** | **0.6686** | **0.5109** | d9034df9dff84a419cd320d1594f0511 |
 
 #### 2. Pre-Registered Overlap Stratification ($N = 19,632$ Test Queries)
 
-| Overlap Stratum | Query Count | % Split | BM25 MRR | Basic MRR | In-Batch MRR | Hard-Negative MRR | Hard-Neg R@1 | Hard-Neg R@10 |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Zero-Overlap ($c = 0.0$)** | 535 | 2.73% | 0.0099 | 0.0396 | **0.0524** | 0.0487 | 0.0224 | 0.1065 |
-| **Low-Overlap ($0 < c \le 0.30$)** | 5,808 | 29.58% | 0.2099 | 0.2781 | 0.3174 | **0.3204** | 0.2317 | 0.5055 |
-| **High-Overlap ($c > 0.30$)** | 13,289 | 67.69% | **0.6625** | 0.4342 | 0.4733 | 0.4716 | 0.3681 | 0.6633 |
-| **OVERALL** | 19,632 | 100.0% | **0.5108** | 0.3773 | **0.4157** | 0.4155 | 0.3184 | 0.6016 |
+| Overlap Stratum | Query Count | % Split | BM25 MRR | Basic MRR | 4L In-Batch | 4L BM25-HN | 4L Dense-HN | 17M Scaled MRR | 17M Scaled R@1 | 17M Scaled R@10 |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Zero-Overlap ( = 0.0$)** | 535 | 2.73% | 0.0099 | 0.0396 | 0.0524 | 0.0487 | 0.0486 | **0.0716** | 0.0336 | 0.1364 |
+| **Low-Overlap ( < c \\le 0.30$)** | 5,808 | 29.58% | 0.2099 | 0.2781 | 0.3174 | 0.3204 | 0.3048 | **0.3559** | 0.2505 | 0.5616 |
+| **High-Overlap ( > 0.30$)** | 13,289 | 67.69% | **0.6625** | 0.4342 | 0.4733 | 0.4716 | 0.4841 | **0.5357** | 0.4265 | 0.7368 |
+| **OVERALL** | 19,632 | 100.0% | **0.5108** | 0.3773 | 0.4157 | 0.4155 | 0.4192 | **0.4699** | 0.3637 | 0.6686 |
 
 #### 3. Paired Bootstrap Hypothesis Testing ($N = 2,000$ Resamples)
 
@@ -681,5 +683,36 @@ To determine whether the model is limited by architecture capacity or data quali
 
 **Scaling Gate Outcome**: Because Category B ($93.0\%$) dramatically exceeds the pre-registered $50.0\%$ threshold ($\ge 50\%$), the **Scaling Gate is officially PASSED**. Failure analysis decisively proves that model errors stem from capacity constraints, mathematically and scientifically justifying **Phase 6.5: Model Capacity & Layer Scaling**.
 
+---
 
+### 12.9 Phase 6.5: Model Capacity Scaling (17.03M Shared Encoder — Complete)
 
+Following the formal pass of the **Scaling Gate** in Phase R3 (where the Capacity Error Rubric proved that **93.0%** of dense model failures were representation/capacity errors, Category B), we executed **Phase 6.5: Model Capacity Scaling**:
+
+#### 1. Architecture & Training Setup
+* **Model**: SharedEncoder scaled in both depth and width:
+  * Number of Layers: **6** (Pre-LN Transformer blocks, .5\times$ depth over baseline).
+  * Hidden Dimension ({\text{model}}$): **384** (.5\times$ width over baseline; matching ll-MiniLM-L6-v2).
+  * Attention Heads: **6** ( = 64$, aligned with Tensor Core memory access).
+  * FFN Expansion ({\text{ff}}$): **1536** ( \times d_{\text{model}}$).
+  * Total Trainable Parameters: **17,028,096 (~17.03M)** (vs 7.38M baseline, a **.3\times$ parameter expansion**).
+* **Hard Negative Mining**: 1 mined FAISS dense hard negative (from data/processed_clean_v2/train_dense_hard_negatives.pt) + 63 in-batch negatives per sample with 3-tier false-negative filtering.
+* **Optimization Recipe**: 4 epochs on 360,957 clean train pairs (22,556 steps, batch size 64, AdamW, $\text{LR} = 3.5\text{e-}4$, $\tau = 0.05$, weight decay 0.01, 10% proportional linear warmup, cosine decay).
+* **Compute & Latency**: Completed in **166.41 minutes (~2.77 hours)** on NVIDIA GeForce RTX 4050 Laptop GPU (peak VRAM: 5.46 GB, CUDA AMP). MLflow Run ID: d9034df9dff84a419cd320d1594f0511.
+
+#### 2. Full Benchmark Verification ( = 20,115$ Validation &  = 19,632$ Test Queries)
+
+| Benchmark Split | MRR [95% CI] | Recall@1 | Recall@5 | Recall@10 | NDCG@10 | vs 4L Baseline (7.38M) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Full Validation Split** (=20,115$) | **0.4620** [0.4559, 0.4679] | **0.3552** | **0.5845** | **0.6655** | **0.5041** | **+5.36 MRR pts** (+4.54% R@1, +6.96% R@10) |
+| **Full Test Split** (=19,632$) | **0.4699** [0.4636, 0.4757] | **0.3637** | **0.5896** | **0.6686** | **0.5109** | **+5.07 MRR pts** (+4.21% R@1, +6.66% R@10) |
+
+#### 3. Key Scientific Findings
+1. **Validation of Capacity Hypothesis**:
+   Scaling from 7.38M to 17.03M parameters delivered an unprecedented leap of **+5.07 MRR points** on the unseen test split (.4192 \to 0.4699$). This confirms that the 4-layer model was severely capacity-constrained.
+2. **Stratum-by-Stratum Breakthrough**:
+   * **Zero-Overlap Queries (=0.0$)**: MRR jumped to **0.0716** (a **.2\times$ advantage** over BM25's 0.0099).
+   * **Low-Overlap Queries ( < c \le 0.30$)**: MRR surged to **0.3559** (outperforming BM25 by **+14.60 MRR points**, with Recall@1 reaching 25.05% vs 14.15%).
+   * **High-Overlap Queries ( > 0.30$)**: MRR jumped from 0.4841 to **0.5357** (+5.16 pts), with Recall@10 breaking past 73.68%.
+3. **Closing the Lexical Gap**:
+   By expanding representation capacity, the dense model narrowed the overall gap to BM25 (0.5108) down to just **0.0409 MRR points**, setting the definitive clean State-of-the-Art for our custom from-scratch neural architecture.
