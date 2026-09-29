@@ -383,19 +383,17 @@ done
 ```
 
 ### Exit Criteria
-- [x] All ablations logged to MLflow experiment `codeembed-phase6-ablations` (4 clean runs, zero duplicates)
-- [x] Summary table documented with bootstrap 95% CIs and comparative deltas
-- [x] Key findings documented (MaskedMeanPooling beats CLS by +4.6 MRR points; $\tau=0.07$ confirmed optimal sweet spot; $L=128$ matches $L=256$ quality while cutting training latency by ~50%)
+- [x] Historical Phase 6 ablations logged to MLflow experiment `codeembed-phase6-ablations` (archived in [Historical Pre-Remediation Archive](#historical-pre-remediation-archive))
+- [x] Clean Phase R4 ablations completed under Protocol §3.3: CLSPooling suffers -61.2% collapse (MRR 0.1566); SeqLen $L=128$ retains 97.8% accuracy (MRR 0.3943) with 1.78x speedup; logged to `codeembed-clean-baselines`
 
 ---
 
-## Phase 6.5: Model Capacity & Scaling Exploration (Week 7.5)
+## Phase 6.5: Exploratory Model Capacity & Scaling (Post-Protocol Iteration)
 
 ### Motivation & Research Goal
-Following Phase 6's architectural ablations (pooling, temperature, sequence length), Phase 6.5 investigates how model capacity—depth (number of layers) and width ($d_{\text{model}}$, $d_{\text{ff}}$)—impacts retrieval performance when trained with BM25 hard negatives under the strict physical constraints of a 6 GB consumer GPU (RTX 4050 Laptop GPU).
+Following the formal pass of the **Scaling Gate** in Phase R3 (where the Capacity Error Rubric proved that **93.0%** of dense model failures were representation/capacity errors, Category B), Phase 6.5 investigates how model capacity—depth (number of layers) and width ($d_{\text{model}}$, $d_{\text{ff}}$)—impacts retrieval performance when trained with hard negatives under the physical constraints of a 6 GB consumer GPU (RTX 4050 Laptop GPU).
 
-Specifically, this phase evaluates the hypothesis:
-> *"Does scaling model capacity from 7.38M parameters up to ~54M parameters with BM25 hard negatives close the gap from 0.938 MRR to ~0.98 MRR on a single consumer GPU?"*
+*Note: As an exploratory engineering iteration conducted after Phase R3, this model's test-set metrics are reported for reference and were not protected from model selection bias.*
 
 ### GPU Memory Budget & Scaling Strategy
 * **Hardware Ceiling**: NVIDIA GeForce RTX 4050 Laptop GPU (6,141 MiB VRAM).
@@ -411,17 +409,17 @@ Specifically, this phase evaluates the hypothesis:
 | Configuration | Layers | $d_{\text{model}}$ | Heads | $d_{\text{ff}}$ | Est. Params | Target Role / Hypothesis |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | **`2L-256d`** | 2 | 256 | 8 | 1024 | ~4.23M | Ultra-lightweight edge model; checks performance floor. |
-| **`4L-256d`** | 4 | 256 | 8 | 1024 | ~7.38M | Phase 5 baseline reference (MRR 0.9383). |
+| **`4L-256d`** | 4 | 256 | 8 | 1024 | ~7.38M | Phase R3 baseline reference (MRR 0.4157). |
 | **`6L-256d`** | 6 | 256 | 8 | 1024 | ~10.53M | Pure depth scaling with constant width. |
 | **`8L-256d`** | 8 | 256 | 8 | 1024 | ~13.68M | Deep representation capacity with low parameter overhead. |
 | **`6L-512d`** | 6 | 512 | 8 | 2048 | ~27.4M | Width + depth scaling; double hidden dimension capacity. |
 | **`8L-512d`** | 8 | 512 | 8 | 2048 | ~36.8M | High-capacity model. |
-| **`12L-512d`** | 12 | 512 | 8 | 2048 | ~54.0M | Target large-scale experiment (~54M params with BM25 hard negatives). |
+| **`12L-512d`** | 12 | 512 | 8 | 2048 | ~54.0M | Target large-scale experiment (~54M params with hard negatives). |
 
 ### Deliverables & Exit Criteria
 - [x] Scaled 6L-384d-6h-1536ff Shared Encoder (17.03M parameters) trained for 4 epochs with 1 FAISS dense hard negative (`configs/shared_6l_dense_clean.yaml`).
 - [x] Evaluated on Full Validation ($N=20,115$): MRR **0.4620** [0.4559, 0.4679], R@1 **0.3552**, R@10 **0.6655**, NDCG@10 **0.5041**.
-- [x] Evaluated on Full Test ($N=19,632$): MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (**Definitive Clean SOTA**).
+- [x] Evaluated on Full Test ($N=19,632$): MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (*Exploratory reference; unprotected from model selection bias*).
 - [x] Peak GPU VRAM constrained to **5.46 GB** via SDPA FlashAttention; runtime **166.41 minutes** on NVIDIA RTX 4050 GPU.
 - [x] Stratification and Discordance analysis against BM25 completed: Dense dominates semantic queries (0.3559 vs BM25 0.2099); Oracle bound reaches **0.6562 MRR**.
 

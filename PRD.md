@@ -49,13 +49,25 @@
 
 ## Success Criteria & Benchmark Validation
 
-| Metric | Target | Clean Achieved (17M Scaled) | Status |
+### Primary Confirmatory Benchmark (Pre-Registered Protocol §3, Evaluated Strictly Once on Test)
+| Metric | Target | Confirmatory Result (Phase R3 Shared) | Status |
 |--------|:---:|:---:|:---:|
-| Test MRR | > 0.40 | **0.4699** [0.4636, 0.4757] | 🟢 Exceeded (+6.99 pts) |
-| Test Recall@1 | > 0.30 | **0.3637** | 🟢 Exceeded (+6.37 pts) |
-| Test Recall@10 | > 0.60 | **0.6686** | 🟢 Exceeded (+6.86 pts) |
-| Training time (single GPU) | < 24 hours | **2.77 hours (4 epochs)** | 🟢 Exceeded (~8.6x faster) |
-| Inference latency (batch=1) | < 50ms | **~12ms (GPU AMP)** | 🟢 Exceeded |
+| Test MRR | > 0.40 | **0.4157** [0.4098, 0.4216] | 🟢 Exceeded (+1.57 pts) |
+| Test Recall@1 | > 0.30 | **0.3178** | 🟢 Exceeded (+1.78 pts) |
+| Test Recall@10 | > 0.60 | **0.6018** | 🟢 Exceeded (+0.18 pts) |
+| Training time (single GPU) | < 24 hours | **~25 minutes (2 epochs)** | 🟢 Exceeded (~57x faster) |
+| Inference latency (batch=1) | < 50ms | **~8ms (GPU AMP)** | 🟢 Exceeded |
+
+*Note: The Shared Encoder demonstrates statistically significant semantic superiority over BM25 on low-overlap queries (+11.05 MRR points, 0.3204 vs 0.2099) and zero-overlap queries ($5\times$ advantage, 0.0487 vs 0.0099).*
+
+### Post-Protocol Exploratory Model Iteration (Unprotected from Selection Bias)
+| Metric | Target | Exploratory Result (Phase 6.5 Scaled 17M)* | Status |
+|--------|:---:|:---:|:---:|
+| Test MRR | > 0.40 | **0.4699** [0.4636, 0.4757] | 🔵 Reference (+6.99 pts) |
+| Test Recall@1 | > 0.30 | **0.3637** | 🔵 Reference (+6.37 pts) |
+| Test Recall@10 | > 0.60 | **0.6686** | 🔵 Reference (+6.86 pts) |
+
+*\*Reported for reference; evaluated during iterative model development without protection from test-set selection bias.*
 
 ## Historical Pre-Remediation Exploration
 

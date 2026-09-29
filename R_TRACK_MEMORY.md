@@ -343,13 +343,13 @@ We adopt the phase-by-phase model hierarchy from the original [`Phases.md`](Phas
   - **Phase R2-A**: Basic Encoder (no modality embeddings): Val MRR **0.3714**, Test MRR **0.3773**.
   - **Phase R2-B**: Shared Encoder (learned modality embeddings + Pilot Gate): Full Val MRR **0.4033**, Low-Overlap **0.2931**. Passed both gate criteria.
   - **Phase R2-C & R2-D**: BM25 Hard Negative Mining (18,594 false negatives purged via 3-tier filters) & Retraining: Full Val MRR **0.4074**, Low-Overlap **0.3047** (+5.58 pts over BM25).
-  - **Phase R2-E**: FAISS Dense Hard Negative Mining: 4L Shared SOTA Test MRR **0.4192** [0.4132, 0.4250].
+  - **Phase R2-E**: FAISS Dense Hard Negative Mining (Exploratory Iteration): 4L Shared Test MRR **0.4192** [0.4132, 0.4250] (unprotected from selection bias).
   - **Phase R4**: Architectural Ablations: CLSPooling suffers $-61.2\%$ collapse (0.1566); SeqLen $L=128$ retains $97.8\%$ accuracy (0.3943) with $1.78\times$ speedup.
-  - **Phase R3**: Final Test Benchmark & Capacity Error Rubric: Evaluated strictly once on test ($N=19,632$). Scaling Gate passed at **93.0% Category B** representation error.
-  - **Phase 6.5**: Model Capacity Scaling (17.03M Shared Encoder, 6L-384d-6h-1536ff): 4 epochs with 1 FAISS dense hard negative. Full Val MRR **0.4620** [0.4559, 0.4679], Full Test MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (**Definitive Clean SOTA**).
+  - **Phase R3**: Final Confirmatory Test Benchmark & Capacity Error Rubric: **Primary Protected Test Evaluation (Protocol §3)**: Shared In-batch Test MRR **0.4157**, Hard-Neg Test MRR **0.4155** (evaluated strictly once on test; +11.05 pts over BM25 on low-overlap). Scaling Gate passed at **93.0% Category B** representation error.
+  - **Phase 6.5**: Post-Protocol Exploratory Capacity Scaling (17.03M Shared Encoder, 6L-384d-6h-1536ff): 4 epochs with 1 FAISS dense hard negative. Full Val MRR **0.4620** [0.4559, 0.4679], Full Test MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (*Exploratory reference; unprotected from model selection bias*).
   - **Discordance & Stratification Analysis**: Dense model crushes BM25 on zero-overlap ($7.2\times$ better, 0.0716 vs 0.0099) and low-overlap (+14.60 pts better, 0.3559 vs 0.2099). Dense wins on 37.7% of all test queries; Oracle bound combining both is **0.6562 MRR** (+14.54 pts over BM25).
 - **Next Actions**:
-  1. **Hybrid Search Benchmark**: Combine BM25 and 17.03M Dense embeddings via Reciprocal Rank Fusion (RRF) and Convex Combination on test ($N=19,632$) to beat BM25 (projected ~0.58–0.62 MRR).
+  1. **Hybrid Search Benchmark**: Empirically evaluate hybrid retrieval combining BM25 and 17.03M Dense embeddings via Reciprocal Rank Fusion (RRF) and Convex Combination on test ($N=19,632$) to bridge lexical and semantic failure modes.
   2. **Phase 8 (CLI Demo)**: Build interactive natural language code search demo (`demo/cli.py`) with hybrid toggle.
 
 

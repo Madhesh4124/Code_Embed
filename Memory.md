@@ -1,17 +1,23 @@
 # CodeEmbed — Project Memory
 
-> **Purpose**: Track what's built, what's working, what's implemented. Update after each milestone.
+> **Purpose**: Track implementation milestones, experimental results, and architectural decisions.
 >
-> 🚀 **Active Track: Clean Benchmarks & Production Models**
-> - Primary Source of Truth: [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md)
-> - Frozen Research Protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`)
-> - Protocol Errata & Deviations: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
+> 🎯 **Primary Confirmatory Benchmark (Protected Protocol §3 Result)**:
+> - **Phase R3 Shared Encoder (4L, 7.38M)**: Evaluated strictly once on the clean test split ($N = 19,632$) per frozen pre-registered protocol:
+>   - **In-Batch Shared**: Test MRR **0.4157** [0.4098, 0.4216], Recall@1 **0.3178**, Recall@10 **0.6018**.
+>   - **BM25 Hard Negative Shared**: Test MRR **0.4155** [0.4095, 0.4215], Recall@1 **0.3184**, Recall@10 **0.6016**.
+>   - **Semantic Search Advantage**: Outperforms BM25 by **+11.05 MRR points** on low-overlap queries (0.3204 vs 0.2099) and by **$5\times$** on zero-overlap queries (0.0487 vs 0.0099).
+>
+> 🔬 **Post-Protocol Exploratory Model Iteration**:
+> *Additional architectures and training variants (FAISS Dense HN, Phase 6.5 capacity scaling, Dual Encoder) were explored after the primary evaluation. Their test-set numbers are reported for reference but were not protected from model selection bias.*
+> - Primary Sources of Truth: [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md), [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`), [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md).
 > - Active Branch: `main`
-> - Current Milestone: **Phase 6.5 (Model Capacity Scaling - 17.03M)** COMPLETE. Definitive clean SOTA Test MRR **0.4699** [0.4636, 0.4757] (+5.07 pts over 4L model, +9.26 pts over Basic). Next: **Hybrid Search Benchmark & Phase 8 Interactive CLI Demo**.
 
 ---
 
 ## Current Status
+
+> *Note on Protocol Nomenclature: In [`PROTOCOL.md`](PROTOCOL.md), Phase R2 defines Neural Baselines & Pilot Gate. Phases R2-A (Basic), R2-B (Shared Pilot), R2-C (Mining), and R2-D (Hard Negatives) represent its sequential sub-tasks.*
 
 | Component | Status | Last Updated | Notes |
 |-----------|--------|--------------|-------|
@@ -19,14 +25,14 @@
 | Phase R1: Clean BM25 Lexical Baseline | 🟢 Completed | 2026-09-20 | ATIRE variant: Full test (19,632 queries) MRR **0.5108** [0.5047, 0.5168]; Val MRR **0.5214** [0.5152, 0.5275]; logged to MLflow |
 | Phase R2-A: Model 1 — Basic Encoder | 🟢 Completed | 2026-09-23 | 2 epochs on clean data: Val MRR **0.3714** [0.3469, 0.3976], R@1 **0.2820**, R@10 **0.5430**; BaseEncoder (~7.38M, 0 modality); MLflow Run `8cc3cb36b0494d42be6bf7253c3ab2e1` |
 | Phase R2-B: Model 2 — Shared Encoder | 🟢 Completed | 2026-09-24 | Pilot initial: 0.3423; Fallback Grid complete (6 runs). Winner `lr_5e-4_tau_0.05` achieves Full Val MRR **0.4033** (Low-Overlap: **0.2931**), PASSING both Pilot Gate criteria! |
-| Phase R2-C: BM25 Hard Negative Mining | 🟢 Completed | 2026-09-24 | 360,957 clean train queries mined in 130.2s (2,773 q/s); 3-tier filters purged 18,594 false negatives (12,448 docstring + 5,589 AST skeleton + 557 MinHash); output matrix (360957, 7) saved to `data/processed_clean_v2/train_hard_negatives.pt` |
+| Phase R2-C: BM25 Hard Negative Mining | 🟢 Completed | 2026-09-24 | 360,957 clean train queries mined in 130.2s (2,773 q/s); 3-tier filters purged 18,594 false negatives (12,448 docstring + 5,589 AST skeleton + 557 MinHash); output matrix saved to `data/processed_clean_v2/train_hard_negatives.pt` |
 | Phase R2-D: Hard Negative Shared Encoder | 🟢 Completed | 2026-09-25 | 2 epochs from scratch (7 in-batch + 1 hard negative): Full Val MRR **0.4074** (Low-Overlap: **0.3047** vs BM25 0.2489), 1k Sample MRR **0.4116** [0.3843, 0.4390], R@1 **0.3130**, R@10 **0.6060**; MLflow Run `c4e2e5c02be74bf19eacf4ea4fc68c5c` |
 | Phase R4: Ablations (Pool/SeqLen) | 🟢 Completed | 2026-09-25 | CLSPooling suffers -61.2% collapse (MRR 0.1566); SeqLen L=128 retains 97.8% quality (MRR 0.3943) with 1.78x speedup; MLflow Runs `1dd691e839ee4684b17d990b51cde549`, `ef009dd84a66465a92847ab378b0bdea` |
-| Phase R3: Final Test Benchmark & Gates | 🟢 Completed | 2026-09-28 | Evaluated strictly once on test (19,632 queries). Shared In-batch MRR **0.4157**, Hard-Neg MRR **0.4155** (+11.05 pts over BM25 on low-overlap). RQ2 lift +0.0384 ($p < 10^{-4}$). Capacity Rubric: 93% Category B (PASS); MLflow Run `c4a336367c154f9b9e18627f82304991` |
-| Shared Encoder (FAISS Dense HN, 4L) | 🟢 Completed | 2026-09-28 | Trained 2 epochs with 1 FAISS dense hard negative on clean data. Val MRR **0.4084** [0.4027, 0.4141], Test MRR **0.4192** [0.4132, 0.4250] (4L SOTA). |
-| Phase 6.5: Model Capacity Scaling (17.03M) | 🟢 Completed | 2026-09-29 | 6L-384d-6h-1536ff Shared Encoder (17.03M params) trained 4 epochs with 1 FAISS dense hard negative. Full Val MRR **0.4620** [0.4559, 0.4679], Full Test MRR **0.4699** [0.4636, 0.4757] (**DEFINITIVE CLEAN SOTA**). MLflow Run `d9034df9dff84a419cd320d1594f0511`. |
-| Dual Encoder (Teammate Track) | 🟢 Completed | 2026-09-28 | Clean Dual Encoder baseline achieved Test MRR **0.2900** (7M, no weight sharing); Dual Fixed with FAISS hard negatives achieved Test MRR **0.4807** (τ=0.1) and **0.4684** (τ=0.07). |
-| Hybrid Search (Dense + BM25) & CLI Demo | ⬜ Next Action | 2026-09-29 | RRF / Convex score interpolation to beat BM25 (Oracle MRR: **0.6562**) + interactive CLI search demo (`demo/cli.py`). |
+| **Phase R3: Final Confirmatory Test Benchmark** | 🟢 Completed | 2026-09-28 | **Primary Protected Test Evaluation (Protocol §3)**: Shared In-batch MRR **0.4157**, Hard-Neg MRR **0.4155** (+11.05 pts over BM25 on low-overlap). RQ2 lift +0.0384 ($p < 10^{-4}$). Capacity Rubric: 93% Category B (PASS); MLflow Run `c4a336367c154f9b9e18627f82304991` |
+| *Exploratory*: Shared FAISS Dense HN (4L) | 🔵 Exploratory | 2026-09-28 | Post-R3 exploratory iteration: Val MRR **0.4084** [0.4027, 0.4141], Test MRR **0.4192** [0.4132, 0.4250] (unprotected from test selection bias). |
+| *Exploratory*: Phase 6.5 Model Scaling (17.03M) | 🔵 Exploratory | 2026-09-29 | Post-R3 exploratory capacity scaling: 6L-384d Shared Encoder trained 4 epochs with FAISS dense HN. Full Val MRR **0.4620** [0.4559, 0.4679], Full Test MRR **0.4699** [0.4636, 0.4757]. MLflow Run `d9034df9dff84a419cd320d1594f0511`. |
+| *Exploratory*: Dual Encoder (Teammate Track) | 🔵 Exploratory | 2026-09-28 | Independent handover: Dual baseline Test MRR **0.2900** (7M, decoupled); Dual with FAISS hard negatives evaluated at two temperatures on test: **0.4807** (τ=0.10) and **0.4684** (τ=0.07). Unprotected from test selection bias. |
+| Hybrid Search (Dense + BM25) & CLI Demo | ⬜ Next Action | 2026-09-29 | Empirical evaluation of Reciprocal Rank Fusion / Convex Combination + interactive CLI search demo (`demo/cli.py`). |
 
 
 ---
@@ -110,26 +116,34 @@
 
 ## Experiment Log
 
-### Clean Benchmarks (Leak-Free Data: `data/processed_clean_v2/`)
+## Experiment Log
 
-| Phase | Run ID | Model | Params | Modality Emb | Negatives | Epochs | Split | MRR [95% CI] | R@1 | R@5 | R@10 | NDCG@10 | Status |
-|:---:|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
-| **Phase R1** | `14feca9d5b024faab9da64beac12541b` | BM25 (ATIRE) | — | — | Lexical | 0 | Full Val (20,115) | **0.5214** [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | 🟢 Completed |
-| **Phase R1** | `fb3b5313f1bb419bb330b7fc0dee6bf5` | BM25 (ATIRE) | — | — | Lexical | 0 | Full Test (19,632) | **0.5108** [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | 🟢 Completed |
-| **Phase R2-A** | `8cc3cb36b0494d42be6bf7253c3ab2e1` | Basic Encoder | 7.38M | None | In-batch (masked) | 2 | Val Sample (1,000) | **0.3714** [0.3469, 0.3976] | 0.2820 | 0.4630 | 0.5430 | 0.4042 | 🟢 Completed |
-| **Phase R2-B** | `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt` | SharedEncoder (4L) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | Full Val (20,115) | **0.4033** [0.3973, 0.4093] | 0.3038 | 0.5118 | 0.5914 | 0.4412 | 🟢 **PASS Gate** |
-| **Phase R2-D** | `c4e2e5c02be74bf19eacf4ea4fc68c5c` | SharedEncoder (BM25 HN) | 7.38M | Learned (2x256) | 1 BM25 + In-batch | 2 | Full Val (20,115) | **0.4074** [0.4015, 0.4135] | 0.3091 | 0.5166 | 0.5976 | 0.4458 | 🟢 **PASS Gate** |
-| **Phase R2-E** | `53875f844cd9491eb0f4ae1e7fe2695a` | SharedEncoder (Dense HN) | 7.38M | Learned (2x256) | 1 FAISS Dense + In-batch | 2 | Full Val (20,115) | **0.4084** [0.4027, 0.4141] | 0.3098 | 0.5176 | 0.5959 | 0.4462 | 🟢 4L Val SOTA |
-| **Phase R4** | `1dd691e839ee4684b17d990b51cde549` | Ablation (CLSPooling) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | Full Val (20,115) | **0.1566** [0.1524, 0.1605] | 0.0957 | 0.2120 | 0.2751 | 0.1762 | 🟢 Ablation (-61.2%) |
-| **Phase R4** | `ef009dd84a66465a92847ab378b0bdea` | Ablation (SeqLen L=128) | 7.35M | Learned (2x256) | In-batch (masked) | 2 | Full Val (20,115) | **0.3943** [0.3886, 0.4002] | 0.2965 | 0.4998 | 0.5801 | 0.4314 | 🟢 97.8% retention |
-| **Phase R3** | `c4a336367c154f9b9e18627f82304991` | Basic Encoder | 7.38M | None | In-batch (masked) | 2 | Full Test (19,632) | **0.3773** [0.3716, 0.3832] | 0.2836 | 0.4814 | 0.5575 | 0.4132 | 🟢 Test Baseline |
-| **Phase R3** | `c4a336367c154f9b9e18627f82304991` | SharedEncoder (In-Batch) | 7.38M | Learned (2x256) | In-batch (masked) | 2 | Full Test (19,632) | **0.4157** [0.4098, 0.4216] | 0.3178 | 0.5246 | 0.6018 | 0.4531 | 🟢 Test In-Batch |
-| **Phase R3** | `c4a336367c154f9b9e18627f82304991` | SharedEncoder (BM25 HN) | 7.38M | Learned (2x256) | 1 BM25 + In-batch | 2 | Full Test (19,632) | **0.4155** [0.4095, 0.4215] | 0.3184 | 0.5227 | 0.6016 | 0.4529 | 🟢 Test BM25 HN |
-| **Phase R3** | `checkpoints/shared_dense_hard_clean/best_shared.pt` | SharedEncoder (Dense HN) | 7.38M | Learned (2x256) | 1 FAISS Dense + In-batch | 2 | Full Test (19,632) | **0.4192** [0.4132, 0.4250] | 0.3216 | 0.5279 | 0.6020 | 0.4562 | 🟢 4L Test SOTA |
-| **Teammate** | `final_results____.md` | DualEncoder (Baseline) | 7M/14M | None (Decoupled) | In-batch | 2 | Full Test (19,632) | **0.2900** | — | — | — | — | 🟢 Dual Baseline |
-| **Teammate** | `final_results____.md` | DualEncoder (FAISS Hard) | 7M/14M | None (Decoupled) | FAISS Hard (τ=0.1) | 1 | Full Test (19,632) | **0.4807** | — | — | — | — | 🟢 Dual HN (τ=0.1) |
-| **Phase 6.5** | `d9034df9dff84a419cd320d1594f0511` | Scaled Shared (6L-384d) | 17.03M | Learned (2x384) | 1 FAISS Dense + In-batch | 4 | Full Val (20,115) | **0.4620** [0.4559, 0.4679] | **0.3552** | **0.5845** | **0.6655** | **0.5041** | 🟢 **SOTA Validation** |
-| **Phase 6.5** | `d9034df9dff84a419cd320d1594f0511` | Scaled Shared (6L-384d) | 17.03M | Learned (2x384) | 1 FAISS Dense + In-batch | 4 | Full Test (19,632) | **0.4699** [0.4636, 0.4757] | **0.3637** | **0.5896** | **0.6686** | **0.5109** | 🟢 **DEFINITIVE CLEAN SOTA** |
+### 1. Pre-Registered Confirmatory Benchmark (Protocol §3, Evaluated Strictly Once on Test)
+
+*The models below constitute the pre-registered protocol evaluation conducted strictly once on the clean test split ($N = 19,632$ queries against 19,632 corpus documents) per [`PROTOCOL.md`](PROTOCOL.md). This is the sole protected, leak-free statistical comparison against lexical BM25.*
+
+| Phase | Model | Params | Modality Emb | Negatives | Epochs | Test MRR [95% CI] | Test R@1 | Test R@5 | Test R@10 | Test NDCG@10 |
+|:---:|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Phase R1** | **BM25 (ATIRE)** | — | — | Lexical | 0 | **0.5108** [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 |
+| **Phase R3** | **Basic Encoder** | 7.38M | None | In-batch (masked) | 2 | **0.3773** [0.3716, 0.3832] | 0.2836 | 0.4814 | 0.5575 | 0.4132 |
+| **Phase R3** | **Shared Encoder (In-Batch)** | 7.38M | Learned (2x256) | In-batch (masked) | 2 | **0.4157** [0.4098, 0.4216] | 0.3178 | 0.5246 | 0.6018 | 0.4531 |
+| **Phase R3** | **Shared Encoder (BM25 HN)** | 7.38M | Learned (2x256) | 1 BM25 + In-batch | 2 | **0.4155** [0.4095, 0.4215] | 0.3184 | 0.5227 | 0.6016 | 0.4529 |
+
+> **Key Pre-Registered Finding**: The Shared Encoder demonstrates statistically significant semantic superiority over BM25 on low-overlap queries (+11.05 MRR points, 0.3204 vs 0.2099) and zero-overlap queries ($5\times$ advantage, 0.0487 vs 0.0099). Overall BM25 maintains a higher dataset-wide score (0.5108 vs 0.4157) due to the 67.7% high-overlap stratum where exact token inverted indexing dominates.
+
+---
+
+### 2. Post-Protocol Exploratory Model Iteration (Unprotected from Selection Bias)
+
+*Additional architectures and training variants were explored after the primary evaluation; their test-set numbers are reported for exploratory reference but were not protected from model selection bias.*
+
+| Model Variant | Params | Negatives / Tuning | Epochs | Split | MRR [95% CI] | R@1 | R@10 | Notes & Selection Caveats |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Shared Encoder (FAISS Dense HN)** | 7.38M | 1 FAISS Dense + In-batch | 2 | Full Val (20,115)<br>Full Test (19,632) | **0.4084** [0.4027, 0.4141]<br>**0.4192** [0.4132, 0.4250] | 0.3098<br>0.3216 | 0.5959<br>0.6020 | Post-R3 exploratory dense mining. |
+| **Scaled Shared Encoder (6L-384d)** | 17.03M | 1 FAISS Dense + In-batch | 4 | Full Val (20,115)<br>Full Test (19,632) | **0.4620** [0.4559, 0.4679]<br>**0.4699** [0.4636, 0.4757] | 0.3552<br>0.3637 | 0.6655<br>0.6686 | Post-R3 exploratory scaling (Category B resolution). |
+| **Dual Encoder (Baseline Handover)** | 14M | In-batch (decoupled) | 2 | Full Test (19,632) | **0.2900** | — | — | Teammate clean baseline (no weight sharing). |
+| **Dual Encoder (FAISS HN, $\tau=0.10$)** | 14M | FAISS Hard ($\tau=0.10$) | 1 | Full Test (19,632) | **0.4807** | — | — | Evaluated on test; test-selected hyperparameter. |
+| **Dual Encoder (FAISS HN, $\tau=0.07$)** | 14M | FAISS Hard ($\tau=0.07$) | 1 | Full Test (19,632) | **0.4684** | — | — | Evaluated on test; test-selected hyperparameter. |
 
 ---
 
@@ -260,23 +274,23 @@ All historical ablations evaluated on 1,000 sampled test queries against the 21,
 6. [x] Mine training set hard negative index matrix (`train_hard_negatives.pt`, 385k samples in 3.2m via CSR sparse matmul)
 7. [x] Train model with hard negatives and evaluate on test benchmark (Epoch 2 fine-tuned: Test MRR 0.9383, R@1 0.9030; +1.5% R@1 boost over in-batch only)
 
-### Phase 6: Ablation Studies (Completed)
-1. [x] Ablation 1: Pooling Strategy (MaskedMeanPooling MRR 0.9296 beats CLSPooling 0.8836 by +4.6 MRR points)
-2. [x] Ablation 2: Temperature Sensitivity ($\tau \in \{0.05, 0.07, 0.10\}$; $\tau=0.07$ optimal sweet spot MRR 0.9296 vs 0.9244 and 0.9252)
-3. [x] Ablation 3: Sequence Length Impact ($L=128$ vs $L=256$; $L=128$ yields 2x speedup with zero quality loss: MRR 0.9292 vs 0.9296, R@1 +0.5%)
-4. [x] Summary table and scientific insights logged to MLflow experiment `codeembed-phase6-ablations` (all 4 runs unified in single IDs)
+### Phase R4: Clean Architectural Ablations (Protocol §3.3)
+1. [x] Ablation 1: Pooling Strategy (MaskedMeanPooling Val MRR 0.4033 beats CLSPooling 0.1566 by +0.2467 MRR points; CLS suffers -61.2% collapse from scratch)
+2. [x] Ablation 2: Sequence Length ($L=128$ retains 97.8% quality [0.3943 vs 0.4033] with 1.78x training speedup)
+3. [x] Temperature Sensitivity: Grid evaluation verified $\tau=0.05$ (0.4033) outperforms $\tau=0.07$ (0.3832) by sharpening gradient penalties against in-batch negatives.
+4. [x] Summary table logged to MLflow experiment `codeembed-clean-baselines`.
 
-### Phase 6.5: Model Capacity & Scaling Exploration (Completed)
+### Phase 6.5: Exploratory Model Capacity Scaling (Post-Protocol Iteration)
 1. [x] Scale SharedEncoder capacity to 17.03M parameters (6 Layers, $d_{\text{model}}=384$, 6 Heads, $d_{\text{ff}}=1536$)
 2. [x] Train 4 epochs with 1 FAISS dense hard negative + 63 in-batch negatives on clean data (`configs/shared_6l_dense_clean.yaml`)
 3. [x] Evaluate on Full Validation ($N=20,115$): MRR **0.4620** [0.4559, 0.4679], R@1 **0.3552**, R@10 **0.6655**, NDCG@10 **0.5041** (+5.36 MRR pts over 4L)
-4. [x] Evaluate on Full Test ($N=19,632$): MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (**Definitive Clean SOTA**)
+4. [x] Evaluate on Full Test ($N=19,632$): MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (*Exploratory reference; unprotected from model selection bias*)
 5. [x] Lexical Stratification Analysis: Zero-Overlap **0.0716** (7.2x vs BM25 0.0099); Low-Overlap **0.3559** (+14.60 pts vs BM25 0.2099); High-Overlap **0.5357**
 6. [x] Discordance Analysis vs BM25: Dense wins on 37.7% of queries, BM25 wins on 38.7%; Oracle bound is **0.6562 MRR** (+14.5 pts over BM25)
 
 ### Hybrid Search & CLI Demo (Current Milestone)
-1. [ ] Implement Hybrid Search benchmark combining BM25 and 17M Dense embeddings (Reciprocal Rank Fusion & Convex Combination)
-2. [ ] Achieve target Test MRR **~0.58–0.62**, decisively beating standalone BM25 (0.5108) across both lexical and semantic queries
+1. [ ] Implement Hybrid Search benchmark combining BM25 and Dense embeddings (Reciprocal Rank Fusion & Convex Combination)
+2. [ ] Empirically evaluate hybrid retrieval performance across lexical and semantic query strata
 3. [ ] Implement interactive terminal search CLI (`demo/cli.py`) with hybrid search toggle
 
 ### Phase 7: Pretrained Baseline (Upcoming)

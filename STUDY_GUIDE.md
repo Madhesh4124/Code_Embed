@@ -677,6 +677,9 @@ During early training runs with `data/dataset.py`, 50 steps took ~5 minutes. An 
 
 All docstrings have been removed from the code documents via coordinate AST byte slicing to eliminate 100% label leakage. Cross-split MinHash LSH deduplication ($J \ge 0.85$) purges near-duplicate contamination. Evaluation uses exact generalized harmonic expected reciprocal rank ($\mathbb{E}[\text{RR}]$) tie-breaking:
 
+#### 1. Pre-Registered Confirmatory Benchmark (Protocol §3, Evaluated Strictly Once on Test)
+*Sole protected, leak-free statistical comparison against lexical BM25 per frozen [`PROTOCOL.md`](PROTOCOL.md).*
+
 | Phase | Model | Architecture / Modality | Parameters | Epochs | Split | MRR [95% CI] | Recall@1 | Recall@5 | Recall@10 | NDCG@10 |
 |:---:|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
 | **Phase R1** | **BM25 Baseline** | ATIRE Lexical Floor | 0 | 0 | Full Val (20,115) | **0.5214** [0.5152, 0.5275] | **0.4107** | **0.6515** | **0.7192** | **0.5644** |
@@ -684,11 +687,17 @@ All docstrings have been removed from the code documents via coordinate AST byte
 | **Phase R2-A** | **Basic Encoder** | Pre-LN (0 modality) | 7.38M | 2 | Full Test (19,632) | **0.3773** [0.3716, 0.3832] | **0.2836** | **0.4814** | **0.5575** | **0.4132** |
 | **Phase R3** | **Shared Encoder (In-Batch)** | Pre-LN + Modality | 7.38M | 2 | Full Test (19,632) | **0.4157** [0.4098, 0.4216] | **0.3178** | **0.5246** | **0.6018** | **0.4531** |
 | **Phase R3** | **Shared Encoder (BM25 HN)** | Pre-LN + 1 BM25 HN | 7.38M | 2 | Full Test (19,632) | **0.4155** [0.4095, 0.4215] | **0.3184** | **0.5227** | **0.6016** | **0.4529** |
-| **Phase R3** | **Shared Encoder (Dense HN)** | Pre-LN + 1 Dense HN | 7.38M | 2 | Full Test (19,632) | **0.4192** [0.4132, 0.4250] | **0.3216** | **0.5279** | **0.6020** | **0.4562** |
-| **Teammate** | **Dual Encoder Baseline** | Decoupled (7M/14M) | 14M | 2 | Full Test (19,632) | **0.2900** | — | — | — | — |
-| **Teammate** | **Dual Encoder (FAISS HN)** | Decoupled + FAISS HN | 14M | 1 | Full Test (19,632) | **0.4807** | — | — | — | — |
-| **Phase 6.5** | **Scaled Shared 17M** | 6L-384d Dense HN | 17.03M | 4 | Full Val (20,115) | **0.4620** [0.4559, 0.4679] | **0.3552** | **0.5845** | **0.6655** | **0.5041** |
-| **Phase 6.5** | **Scaled Shared 17M** | 6L-384d Dense HN | 17.03M | 4 | Full Test (19,632) | **0.4699** [0.4636, 0.4757] | **0.3637** | **0.5896** | **0.6686** | **0.5109** |
+
+#### 2. Post-Protocol Exploratory Model Iteration (Unprotected from Selection Bias)
+*Exploratory engineering iterations evaluated on test during development after observing Phase R3 results; reported for reference but not protected from model selection bias.*
+
+| Model Variant | Architecture / Modality | Parameters | Epochs | Split | MRR [95% CI] | Recall@1 | Recall@10 | Notes & Selection Caveats |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| **Shared Encoder (Dense HN)** | Pre-LN + 1 Dense HN | 7.38M | 2 | Full Test (19,632) | **0.4192** [0.4132, 0.4250] | 0.3216 | 0.6020 | Post-R3 exploratory dense mining. |
+| **Scaled Shared 17M** | 6L-384d Dense HN | 17.03M | 4 | Full Val (20,115)<br>Full Test (19,632) | **0.4620** [0.4559, 0.4679]<br>**0.4699** [0.4636, 0.4757] | 0.3552<br>0.3637 | 0.6655<br>0.6686 | Post-R3 capacity scaling (Category B resolution). |
+| **Dual Encoder Baseline** | Decoupled (7M/14M) | 14M | 2 | Full Test (19,632) | **0.2900** | — | — | Teammate clean baseline (no weight sharing). |
+| **Dual Encoder (FAISS HN, $\tau=0.10$)** | Decoupled + FAISS HN | 14M | 1 | Full Test (19,632) | **0.4807** | — | — | Evaluated on test; test-selected hyperparameter. |
+| **Dual Encoder (FAISS HN, $\tau=0.07$)** | Decoupled + FAISS HN | 14M | 1 | Full Test (19,632) | **0.4684** | — | — | Evaluated on test; test-selected hyperparameter. |
 
 ---
 
@@ -712,7 +721,7 @@ All docstrings have been removed from the code documents via coordinate AST byte
 ### 11.2 Answers to Core Research Questions (Clean Protocol vs Historical)
 
 #### RQ1: Can a small Transformer learn useful code-text representations from scratch?
-* **Answer**: **Yes**. On clean leak-free data, our custom from-scratch Transformer encoder achieves **0.4699 Test MRR** and **66.86% Recall@10** (17.03M Scaled Shared), outperforming BM25 by **$+14.60$ MRR points** on low-overlap semantic queries and by **$7.2\times$** on zero-overlap queries.
+* **Answer**: **Yes**. In our primary confirmatory benchmark (Phase R3), our 7.38M parameter Shared Encoder achieves **0.4157 Test MRR** and **60.18% Recall@10** trained entirely from scratch on clean leak-free data. Crucially, it demonstrates strong semantic understanding where lexical retrieval fails: outperforming BM25 by **$+11.05$ MRR points** on low-overlap queries (0.3204 vs 0.2099) and by **$5\times$** on zero-overlap queries (0.0487 vs 0.0099). In post-protocol exploratory iteration, expanding capacity to 17.03M parameters reached **0.4699 Test MRR** and **66.86% Recall@10** (+14.60 MRR points over BM25 on low-overlap).
 
 #### RQ2: Does explicit modality information improve a shared encoder?
 * **Answer**: **Decisively Yes**. On clean test data ($N=19,632$), adding learned 2×256 modality embeddings to the shared architecture provides a statistically verified lift of **$+0.0384$ Test MRR** ($p < 10^{-4}$) and **$+3.42\%$ Recall@1** (0.4157 vs 0.3773) without adding any transformer layers.
@@ -721,7 +730,7 @@ All docstrings have been removed from the code documents via coordinate AST byte
 * **Answer**: **No**. Without weight sharing, the Dual Encoder baseline achieves only **0.2900 Test MRR**, severely lagging the Shared Encoder (**0.4157 MRR**). Cross-modal parameter sharing regularizes token abstractions and aligns representations in a shared topological space far more efficiently than independent models.
 
 #### RQ4: Do hard negatives improve retrieval?
-* **Answer**: **Yes, with targeted impact**. On clean data, FAISS dense hard negatives lift 4L Shared Encoder test MRR to **0.4192** (up +1.16 MRR points on semantic low-overlap queries over in-batch), and enable Dual Encoders to bridge decoupled latent spaces (0.2900 to 0.4807). Scaling to 17M with FAISS dense negatives pushes Test MRR to **0.4699**.
+* **Answer**: **Yes, with targeted impact**. In the confirmatory benchmark, BM25 hard negatives maintain parity overall (0.4155 vs 0.4157) while providing targeted lift on low-overlap semantic queries (0.3204 vs 0.3174). In exploratory iterations, FAISS dense hard negatives lift 4L Shared Encoder test MRR to **0.4192** and help bridge decoupled spaces in Dual Encoders, though post-R3 test-set evaluations are exploratory and subject to model selection bias.
 
 ---
 
@@ -819,7 +828,9 @@ CLS Pooling:
 #### Why CLS Fails in From-Scratch Transformers:
 1. **Lack of Self-Supervised Pretraining**: Models like BERT or RoBERTa train for millions of steps with Masked Language Modeling (MLM) and Next Sentence Prediction, forcing the `[CLS]` token to act as an information aggregator. In from-scratch contrastive learning with small data budgets (385k samples, 1 epoch), self-attention weights do not have enough training iterations to route all contextual signals into position 0.
 2. **Gradient Starvation**: In `MaskedMeanPooling`, the backward gradient $\frac{\partial \mathcal{L}}{\partial \mathbf{h}_i} = \frac{1}{N} \frac{\partial \mathcal{L}}{\partial \mathbf{h}}$ flows directly into every non-padded token representation. In `CLSPooling`, gradient backpropagation flows *only* through position 0, starving the rest of the sequence from direct contrastive supervision.
-3. **Empirical Deficit**: CLS pooling lost **-4.6 MRR points** (0.8836 vs 0.9296) and suffered a **-5.4% drop** in Recall@1 (83.4% vs 88.8%).
+3. **Empirical Deficit**:
+   - **Clean Data (Phase R4)**: `CLSPooling` suffered a catastrophic **-61.2% collapse** from scratch (**Val MRR 0.1566** vs **0.4033** for `MaskedMeanPooling`), definitively demonstrating the fatal representation bottleneck.
+   - **Historical Exploration**: Lost **-4.6 MRR points** (0.8836 vs 0.9296) and suffered a **-5.4% drop** in Recall@1 (83.4% vs 88.8%).
 
 ---
 
@@ -832,12 +843,13 @@ $$\mathbf{S}_{ij} = \frac{\mathbf{z}_i^\top \mathbf{z}_j}{\tau}, \quad \mathcal{
 * **$\tau = 0.05$ ($20\times$ multiplier)**:
   - Scales a cosine similarity difference of $0.1$ into a logit difference of $2.0$ ($e^2 \approx 7.4\times$ probability ratio).
   - Creates an ultra-peaked softmax distribution.
-  - **Downside**: Over-penalizes soft in-batch negatives that happen to share legitimate high-level topic overlap, slightly hurting generalization (**Test MRR 0.9244**).
+  - **Clean Data Finding (Phase R2-B Fallback Grid)**: Sharper temperature proved optimal on clean data (**Val MRR 0.4033** vs 0.3832 for $\tau=0.07$), providing necessary contrastive margin when distinguishing subtle code-text patterns without verbatim docstring overlap.
+  - **Historical Observation**: Slightly over-penalized soft in-batch negatives on leaky data (Test MRR 0.9244).
 * **$\tau = 0.10$ ($10\times$ multiplier)**:
   - Softens the probability distribution.
-  - **Downside**: The contrastive penalty gradient $\nabla_{\mathbf{z}} \mathcal{L}$ against hard negatives is attenuated, allowing false positives to linger close to the positive (**Test MRR 0.9252**).
+  - **Downside**: The contrastive penalty gradient $\nabla_{\mathbf{z}} \mathcal{L}$ against hard negatives is attenuated, allowing false positives to linger close to the positive (Historical Test MRR 0.9252).
 * **$\tau = 0.07$ ($14.3\times$ multiplier)**:
-  - Confirmed as the empirical **sweet spot** (**Test MRR 0.9296**), balancing gradient penalty hardness against semantic tolerance.
+  - Standard reference baseline balancing gradient hardness and margin tolerance (Historical Test MRR 0.9296; Clean Val MRR 0.3832).
 
 ---
 
@@ -849,10 +861,8 @@ $$\text{FLOPs}_{\text{attention}} \propto B \times H \times L^2$$
 At $L = 256$, $L^2 = 65,536$. At $L = 128$, $L^2 = 16,384$ (**$75\%$ reduction in attention FLOPs**).
 
 #### Empirical Result:
-* **Training Time**: Dropped from **19.70 minutes to 10.47 minutes** (**~2x overall throughput boost**).
-* **Test Retrieval**:
-  - Test MRR: **0.9292** (vs 0.9296, $-0.0004$ delta).
-  - Test Recall@1: **0.8930** (vs 0.8880, **$+0.5\%$ increase**).
+* **Clean Data (Phase R4)**: Truncating from 256 to 128 tokens retained **97.8% of retrieval accuracy** (**Val MRR 0.3943** vs **0.4033**) while delivering a **$1.78\times$ training speedup** (slashing step latency from 0.35s to 0.19s).
+* **Historical Exploration**: Dropped training time from **19.70 minutes to 10.47 minutes** (~2x throughput boost), yielding Test MRR **0.9292** (vs 0.9296, $-0.0004$ delta) and Test Recall@1 **0.8930** (vs 0.8880, $+0.5\%$).
 * **Why $L=128$ Wins for Code Search**:
   In Python source code and docstrings:
   - The function signature (`def name(args):`) is at positions $0\text{--}20$.
@@ -1046,6 +1056,4 @@ Evaluating discordance across all 19,632 test queries reveals that Dense and BM2
 In production search engines (Elasticsearch, Vespa, Pinecone, Cohere, GitHub Code Search), pure dense search is never deployed alone for code. Instead, industry deploys **Hybrid Search**:
 1. **Reciprocal Rank Fusion (RRF)**:
    $$\text{Score}_{\text{RRF}}(d) = \frac{1}{60 + r_{\text{BM25}}(d)} + \frac{1}{60 + r_{\text{Dense}}(d)}$$
-2. **Convex Combination**:
-   $$\text{Score}_{\text{hybrid}}(d) = \alpha \cdot \text{Score}_{\text{Dense}}(d) + (1 - \alpha) \cdot \text{Score}_{\text{BM25}}(d)$$
-Combining both bridges the lexical gap and is projected to deliver **~0.58–0.62 Test MRR**, definitively outperforming BM25 on both keyword and semantic searches.
+Combining both bridges the lexical gap by fusing BM25's exact inverted index on high-overlap queries with the dense model's semantic representations on low-overlap queries. Evaluating this empirically on the test split will measure how closely hybrid fusion approaches the 0.6562 Oracle upper bound.
