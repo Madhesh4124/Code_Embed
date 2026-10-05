@@ -195,7 +195,13 @@ def load_corpus() -> pd.DataFrame:
 def load_search_engine(model_type: str = "shared_6l") -> SearchEngine:
     df = load_corpus()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    return SearchEngine(corpus_df=df, model_type=model_type, device=device)
+    try:
+        return SearchEngine(corpus_df=df, model_type=model_type, device=device)
+    except Exception as e:
+        if model_type != "shared_6l":
+            st.warning(f"Could not load {model_type} ({e}). Falling back to CodeEmbed 6L.")
+            return SearchEngine(corpus_df=df, model_type="shared_6l", device=device)
+        raise
 
 
 @st.cache_resource(show_spinner="Pre-fitting 2D PCA on 19,632 latent embeddings...")

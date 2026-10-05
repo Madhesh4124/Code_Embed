@@ -23,10 +23,14 @@ checkpoints/*
 !checkpoints/shared_6l_dense_clean/
 checkpoints/shared_6l_dense_clean/*
 !checkpoints/shared_6l_dense_clean/model_weights_only.pt
+!checkpoints/shared_clean/
+checkpoints/shared_clean/*
+!checkpoints/shared_clean/model_weights_only.pt
 indices/
 *.faiss
 data/cache/*
 !data/cache/corpus_emb_shared_6l.npy
+!data/cache/corpus_emb_shared_4l.npy
 
 # Experiment Tracking
 mlruns/

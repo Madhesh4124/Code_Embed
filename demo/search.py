@@ -20,7 +20,8 @@ import time
 from pathlib import Path
 
 # Add project root to sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 
 import numpy as np
 import pandas as pd
@@ -86,7 +87,7 @@ class SearchEngine:
         self._init_dense_model()
 
     def _init_dense_model(self):
-        cache_dir = Path("data/cache")
+        cache_dir = ROOT_DIR / "data" / "cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         emb_cache_path = cache_dir / f"corpus_emb_{self.model_type}.npy"
 
@@ -112,11 +113,11 @@ class SearchEngine:
                 np.save(emb_cache_path, self.corpus_embeddings)
         else:
             # CodeEmbed Shared Transformer
-            tok_path = Path("tokenizer/tokenizer.json")
+            tok_path = ROOT_DIR / "tokenizer" / "tokenizer.json"
             self.tokenizer = CodeEmbedTokenizer(tok_path)
 
             if self.model_type == "shared_6l":
-                ckpt_dir = Path("checkpoints/shared_6l_dense_clean")
+                ckpt_dir = ROOT_DIR / "checkpoints" / "shared_6l_dense_clean"
                 ckpt_path = ckpt_dir / "model_weights_only.pt" if (ckpt_dir / "model_weights_only.pt").exists() else ckpt_dir / "best_shared.pt"
                 self.dense_model = SharedEncoder(
                     vocab_size=16000,
@@ -129,7 +130,7 @@ class SearchEngine:
                     num_modalities=2,
                 ).to(self.device)
             else:  # shared_4l
-                ckpt_dir = Path("checkpoints/shared_clean")
+                ckpt_dir = ROOT_DIR / "checkpoints" / "shared_clean"
                 ckpt_path = ckpt_dir / "model_weights_only.pt" if (ckpt_dir / "model_weights_only.pt").exists() else ckpt_dir / "best_shared.pt"
                 self.dense_model = SharedEncoder(
                     vocab_size=16000,
