@@ -116,7 +116,8 @@ class SearchEngine:
             self.tokenizer = CodeEmbedTokenizer(tok_path)
 
             if self.model_type == "shared_6l":
-                ckpt_path = Path("checkpoints/shared_6l_dense_clean/best_shared.pt")
+                ckpt_dir = Path("checkpoints/shared_6l_dense_clean")
+                ckpt_path = ckpt_dir / "model_weights_only.pt" if (ckpt_dir / "model_weights_only.pt").exists() else ckpt_dir / "best_shared.pt"
                 self.dense_model = SharedEncoder(
                     vocab_size=16000,
                     d_model=384,
@@ -128,7 +129,8 @@ class SearchEngine:
                     num_modalities=2,
                 ).to(self.device)
             else:  # shared_4l
-                ckpt_path = Path("checkpoints/shared_clean/best_shared.pt")
+                ckpt_dir = Path("checkpoints/shared_clean")
+                ckpt_path = ckpt_dir / "model_weights_only.pt" if (ckpt_dir / "model_weights_only.pt").exists() else ckpt_dir / "best_shared.pt"
                 self.dense_model = SharedEncoder(
                     vocab_size=16000,
                     d_model=256,

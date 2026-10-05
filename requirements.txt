@@ -21,7 +21,9 @@ omegaconf >= 2.3.0  #For configuration management
 #utilities and visualization
 tqdm >= 4.66.0  #For progress bars
 rich >=13.7.0  #For rich text and beautiful formatting in the terminal
-matplotlib >= 3.8.0  
+matplotlib >= 3.8.0
+streamlit >= 1.35.0
+plotly >= 5.20.0  
 
 #Dev and Testing
 pytest >=8.0.0

@@ -1,0 +1,357 @@
+# CodeEmbed — R-Track Research Memory & Context
+
+> **Historical Invalidation Notice**:
+> Phases 1–6 benchmarks (BM25 MRR 0.9498, neural MRR 0.9383) were computed on CodeSearchNet data with 100% docstring-in-code label leakage (`hit = query in code == 100%`).
+> The project operates under the **R-Track (Remediation & Pre-Registered Protocol)**.
+> - Base Protocol: [`PROTOCOL.md`](PROTOCOL.md) (Git Tag `protocol-v1`, Commit `3e62e8a`)
+> - Protocol Revisions & Errata: [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) (Protocol v1.1)
+
+---
+
+## 1. Executive Summary & Root Cause
+
+1. **The Leak**:
+   - In CodeSearchNet, `func_code_string` retained verbatim docstrings inside triple quotes, while `func_documentation_string` was used as the natural language query.
+   - The historical data pipeline copied `func_code_string` directly into `code`. As a result, 100.0% of test queries were present as identical substrings inside the target code document.
+   - BM25 achieved an inflated MRR of 0.9498 because it matched the query against its verbatim embedded clone.
+2. **The Remediation Protocol**:
+   - All historical benchmarks and conclusions were marked invalid.
+   - A pre-registered research protocol was drafted and tagged (`protocol-v1`), with technical errata codified in [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md).
+   - AST line-and-column byte slicing on dedented code strips docstrings while preserving formatting and comments. Clean data is output to a separate versioned directory: `data/processed_clean_v2/`.
+   - A MinHash LSH cross-split deduplication pipeline purges exact and near-duplicate collisions ($J \ge 0.85$).
+
+---
+
+## 2. Invalidation Evidence & Baseline State
+
+### 2.1 Documentation Structure & Historical Archives
+To ensure clear scientific separation without cluttering active workflows, all historical pre-remediation exploratory benchmarks (Phases 1–6) are archived in dedicated historical archive sections across documentation:
+- [`walkthrough.md`](walkthrough.md) (Section 7.2)
+- [`STUDY_GUIDE.md`](STUDY_GUIDE.md) (Section 11.1)
+- [`Memory.md`](Memory.md) (Historical Pre-Remediation Benchmarks Archive)
+- [`PRD.md`](PRD.md) and [`Phases.md`](Phases.md) (Historical Exploration Archives)
+
+All primary benchmark tables, status tables, and next actions represent clean, leak-free evaluations conducted under [`PROTOCOL.md`](PROTOCOL.md) on `data/processed_clean_v2/`.
+
+### 2.2 Database & Checkpoint Invalidation
+- **MLflow Tracking**: `sqlite:///mlflow.db`
+  - 6 historical runs across 3 experiments (`codeembed-baselines`, `codeembed-hard-negatives`, `codeembed-phase6-ablations`) tagged:
+    `data_version=leaky_v1`, `validity=INVALID_LEAKY_DATA`.
+- **Checkpoints**: `checkpoints/`
+  - 59 `.pt` checkpoint files tagged: `data_version=leaky_v1`, `validity=INVALID_LEAKY_DATA`.
+
+---
+
+## 3. Protocol Key Points (See PROTOCOL.md and PROTOCOL_ERRATA.md)
+
+Refer to [`PROTOCOL.md`](PROTOCOL.md) and [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) for full formal specifications. Key rules:
+
+- **Target Output Directory**: `data/processed_clean_v2/`. Original `data/processed/` is preserved for historical comparison and tokenizer provenance.
+- **Coordinate Alignment**: Slicing on UTF-8 bytes of `textwrap.dedent(code)`, with a dummy-function wrapper fallback for multi-line string zero-margin cases. Semicolon trailing characters in single-line functions are stripped.
+- **Generalized Expected Reciprocal Rank ($\mathbb{E}[\text{RR}]$)**:
+  $$\mathbb{E}[\text{RR}] = \frac{H_{S_{> \text{target}} + S_{= \text{target}}} - H_{S_{> \text{target}}}}{S_{= \text{target}}}$$
+  Accounts for Jensen's inequality across arbitrary target score ties.
+- **Cross-Split Dedup Standard**: Keep `train` intact; keep `test` canonical; purge exact code matches and MinHash LSH ($J \ge 0.85$) near-duplicates from `validation` and `test`. Normalized AST skeletons reserved for hard-negative filtering only.
+- **Data Integrity Tests**: Structural AST test (`ast.get_docstring is None`), AST-dump equivalence test, and rate-based overlap diagnostic ($\text{Rate}_{\text{true}} - \text{Rate}_{\text{null}} \le 0.005$).
+- **Pilot Role**: Designated as an Implementation Sanity Check, with a capped 6-run validation recipe fallback if not passing.
+- **Scaling Gate (Phase 6.5)**: Proceed to scaling if and only if Category B (capacity errors) $> 50\%$ on 100 seeded validation failures; otherwise scaling is blocked.
+
+---
+
+## 4. Current File Map & Ready Components
+
+| File Path | Description | Status |
+|---|---|---|
+| [`PROTOCOL.md`](PROTOCOL.md) | Immutable pre-registered protocol v1 | 🟢 Committed & Tagged `protocol-v1` |
+| [`PROTOCOL_ERRATA.md`](PROTOCOL_ERRATA.md) | Protocol revisions and errata (v1.1) | 🟢 Active Specification |
+| [`R_TRACK_MEMORY.md`](R_TRACK_MEMORY.md) | Active project state & tracking | 🟢 Active Source of Truth |
+| [`data/stopwords.json`](data/stopwords.json) | Vendored English stopwords | 🟢 Created |
+| [`data/preprocess.py`](data/preprocess.py) | Dedented byte-accurate stripper + MinHash LSH | 🟢 Complete (Phase R0) |
+| [`data/processed_clean_v2/`](data/processed_clean_v2/) | Cleaned Parquet & `.pt` tokenized splits + hashes | 🟢 Generated & Verified |
+| [`tests/test_data_integrity.py`](tests/test_data_integrity.py) | Coordinate slicing, AST equivalence, harmonic E[RR] tests | 🟢 13/13 Passed |
+| [`data/pretokenize.py`](data/pretokenize.py) | Fast batch pre-tokenization into `.pt` binary tensor files | 🟢 Complete (Train/Val/Test) |
+| [`scripts/run_baseline.py`](scripts/run_baseline.py) | BM25 benchmark script with MLflow tagging | 🟢 Complete |
+| [`configs/basic_clean.yaml`](configs/basic_clean.yaml) | Basic Encoder config for clean data | 🟢 Created |
+| [`checkpoints/basic_clean/best_basic.pt`](checkpoints/basic_clean/best_basic.pt) | Phase R2-A Basic Encoder checkpoint (~7.38M) | 🟢 Trained & Verified |
+
+---
+
+## 5. Remediation Milestones & Completed Phases
+
+### 5.1 Phase R0: Clean Data Preprocessing & Deduplication (Complete)
+- **Output Directory**: `data/processed_clean_v2/` (historical `data/processed/` preserved).
+- **Train Sample Count**: 360,957 (parse drops: 3,798 = 0.92%, syntax error drops: 283).
+- **Validation Sample Count**: 20,115 (purged 4 MinHash near-duplicates vs train, 0 exact collisions).
+- **Test Sample Count**: 19,632 (purged 4 MinHash near-duplicates vs train, 0 exact collisions).
+- **Hashes**: Saved in `data/processed_clean_v2/data_hashes.json`.
+- **Pretokenization**: Generated binary tensors in `data/processed_clean_v2/` (`train_tokenized.pt`, `validation_tokenized.pt`, `test_tokenized.pt`).
+- **Test Suite**: 22/22 unit tests passing across `test_data_integrity.py` and `test_bm25.py`.
+
+### 5.2 Phase R1: Clean BM25 Lexical Baseline (Complete)
+Following validation-set selection (§1.10 in `PROTOCOL_ERRATA.md`), the conservative **ATIRE negative-IDF floor variant** (`method="rank_bm25"`) was adopted to prevent claiming cheap neural wins. Evaluated on full clean splits (generalized harmonic tie-breaking):
+
+| Split | Corpus Size | Queries | MRR | 95% CI | R@1 | R@5 | R@10 | NDCG@10 | MLflow Run ID |
+|---|---|---|---|---|---|---|---|---|---|
+| **Test** | 19,632 | 19,632 | **0.5108** | [0.5047, 0.5166] | 0.4052 | 0.6340 | 0.6993 | 0.5514 | `fb3b5313f1bb419bb330b7fc0dee6bf5` |
+| **Validation** | 20,115 | 20,115 | **0.5214** | [0.5152, 0.5275] | 0.4107 | 0.6515 | 0.7192 | 0.5644 | `14feca9d5b024faab9da64beac12541b` |
+
+> [!NOTE]
+> **Scientific Finding**: When docstring query leakage is eliminated, BM25 drops from the inflated leaky score of **MRR 0.9513** to a realistic **MRR 0.5108** on the identical 19,632 test items (-44.1 pts MRR, -51.1 pts R@1).
+
+### 5.3 Validation Battery & Critique Resolution (Complete)
+All requested validation gates have been empirically verified:
+1. **Like-for-Like Comparison on Identical 19,632 Test Items**:
+   - Leaky code: MRR = 0.9513, R@1 = 0.9164, R@5 = 0.9885, R@10 = 0.9937, NDCG@10 = 0.9618.
+   - Clean code: MRR = 0.5108, R@1 = 0.4052, R@5 = 0.6340, R@10 = 0.6993, NDCG@10 = 0.5514.
+   - Net leakage inflation: +0.4405 MRR, +0.5112 R@1.
+2. **Frozen Stratification on Train IDF (ATIRE Baseline)**:
+   - **Validation ($N = 20,115$)**:
+     - Zero ($c = 0$): 580 (2.88%), MRR = 0.0023, R@1 = 0.0000, R@10 = 0.0086
+     - Low ($0 < c \le 0.30$): 6,321 (31.42%), MRR = 0.2489, R@1 = 0.1569, R@10 = 0.4297
+     - High ($c > 0.30$): 13,214 (65.69%), MRR = 0.6745, R@1 = 0.5502, R@10 = 0.8888
+     - Overall: MRR = 0.5214, R@1 = 0.4107, R@10 = 0.7192
+   - **Test ($N = 19,632$)**:
+     - Zero ($c = 0$): 535 (2.73%), MRR = 0.0099, R@1 = 0.0037, R@10 = 0.0206
+     - Low ($0 < c \le 0.30$): 5,808 (29.58%), MRR = 0.2099, R@1 = 0.1284, R@10 = 0.3698
+     - High ($c > 0.30$): 13,289 (67.69%), MRR = 0.6625, R@1 = 0.5423, R@10 = 0.8706
+     - Overall: MRR = 0.5108, R@1 = 0.4052, R@10 = 0.6993
+   - **Phase R3 Pilot Gate Reference (Updated)**: $0.75 \times 0.5214 = \mathbf{0.3910}$ validation MRR (or Low-overlap validation MRR $> \mathbf{0.2489}$).
+3. **MinHash Deduplication Positive Control & Exact Nearest-Neighbor Search**:
+   - The detector caught **100/100 (100.0%)** seeded synthetic $J \ge 0.85$ duplicates (mean $J = 0.927$).
+   - **Exact Inverted-Index Nearest-Neighbor Jaccard on Test Split ($N = 500$ vs $360,957$ Train)**:
+     - Min: 0.0000, P25: 0.0165, Median: **0.0314**, Mean: **0.0524**, P75: 0.0558, P90: 0.1111, P95: 0.1501, P99: 0.3941, Max: **0.8462**.
+     - **Pairs with $J \ge 0.85$**: **0 / 500 (0.00%)** — bounds the true cross-split near-duplicate rate at $\le \mathbf{0.60\%}$ at the 95% confidence level (rule of three).
+4. **Data Hygiene: Within-Split Duplicates & Kept vs Dropped Distribution**:
+   - **Within-Split Duplicate Code**: Train = 0 (0.00%), Validation = 0 (0.00%), Test = 0 (0.00%).
+   - **Within-Split Duplicate Queries**: Train = 16,552 (4.59%), Validation = 553 (2.75%), Test = 526 (2.68%).
+   - **Kept vs. Dropped Length Distribution (Uniform Random Sample $N=10,000$, `seed=42`)**:
+     - Kept Code Tokens: Median = **68.0**, Mean = 104.5, P10 = 27.0, P25 = 40.0, P75 = 121.0, P90 = 212.0.
+     - Dropped Code Tokens: Median = **38.0**, Mean = 72.2, P10 = 15.0, P25 = 20.0, P75 = 79.0, P90 = 151.0.
+     - *Observation*: Dropped code is selectively shorter due to the $<10$ token filter, $<3$ word docstrings, and empty migration/init stubs.
+   - **Top Repositories**:
+     - Kept: `saltstack/salt` (290), `materialsproject/pymatgen` (62), `brocade/pynos` (52), `mitsei/dlkit` (51), `google/grr` (49).
+     - Dropped: `StackStorm/pybind` (259), `twilio/twilio-python` (148), `saltstack/salt` (93), `mitsei/dlkit` (93), `fprimex/zdesk` (69).
+5. **Overlap Diagnostic Audit on All 19,632 Test Pairs**:
+   - True-pair matches: 241 / 19,632 (1.23%); Null-pair matches: 0 / 19,632 (0.00%); Net margin: +1.23%.
+   - Root-cause breakdown of 241 matches: 118 (49.0%) body statements/variable names, 61 (25.3%) inline `#` comments, 58 (24.1%) function signatures/parameter names, 4 (1.7%) API doc URLs.
+   - BM25 on hits: MRR = 0.8406, R@1 = 0.7510; BM25 on non-hits (98.77%): MRR = 0.4950, R@1 = 0.3902.
+6. **BM25 Reference Parity & Full-Corpus Evaluation**:
+   - **Full Corpus Benchmark (19,632 docs, 2,000 queries)**:
+     - Reference BM25Okapi (ATIRE): **MRR = 0.5115**
+     - Custom BM25Retriever (Robertson $\ln(\dots + 1.0)$): **MRR = 0.5005**
+     - Absolute difference: **0.0110**
+     - *Diagnosis*: Root cause identified as Robertson's $\ln(1 + \text{fraction})$ non-negative smoothing vs ATIRE's piecewise $\epsilon \cdot \overline{\text{IDF}}$ negative-frequency floor.
+   - **Direct Numerical Parity (`method='rank_bm25'`)**:
+     - Evaluated on 1,000 queries: Mean Pearson score correlation = **1.000000**, Mean absolute score diff = **$3.19 \times 10^{-5}$**, Max score diff = **$0.002868 < 0.005$** (PASS), MRR difference = **0.0000** (PASS).
+
+### 5.4 Phase R2-A: Model 1 — Basic Encoder (Complete)
+- **Model**: BaseEncoder (~7.38M parameters, 4L-256d-8h-1024ff, Pre-LN, MaskedMeanPooling, zero modality embeddings).
+- **Training**: 2 epochs on 360,957 clean train samples (5,638 steps, batch size 128, AdamW, LR 3e-4, 10% linear warmup, cosine decay, temperature $\tau = 0.07$, symmetric in-batch false negative mask $M_{i,j}$).
+- **Hardware & Latency**: 24.85 minutes total on NVIDIA RTX 4050 Laptop GPU (CUDA AMP).
+- **Validation Evaluation (1,000 sampled queries against full 20,115 clean validation corpus)**:
+  - **MRR**: **0.3714** (95% CI: [0.3469, 0.3976])
+  - **Recall@1**: **0.2820** (95% CI: [0.2550, 0.3100])
+  - **Recall@5**: **0.4630** (95% CI: [0.4300, 0.4950])
+  - **Recall@10**: **0.5430** (95% CI: [0.5100, 0.5730])
+  - **NDCG@10**: **0.4042** (95% CI: [0.3780, 0.4310])
+  - **MLflow Run ID**: `8cc3cb36b0494d42be6bf7253c3ab2e1` (Experiment: `codeembed-clean-baselines`)
+- **Key Scientific Finding**:
+  - The minimal neural anchor (without learned modality embeddings) achieves **0.3714 Val MRR**, operating just beneath the Pilot Gate threshold ($0.75 \times 0.5214 = \mathbf{0.3910}$).
+  - This establishes the empirical baseline for Phase R2-B (Shared Encoder) to measure $\Delta_{\text{modality}} = \text{MRR}(\text{Shared}) - \text{MRR}(\text{Basic})$ to answer **RQ2**.
+
+### 5.5 Phase R2-B: Model 2 — Shared Encoder & Pilot Gate Evaluation (Complete)
+- **Model**: [`SharedEncoder`](file:///d:/CODE/Projects/X/model/shared_encoder.py) (~7.38M parameters, 4L-256d-8h-1024ff, Pre-LN, MaskedMeanPooling, learned modality embeddings `nn.Embedding(2, 256)`: code=1, query=0).
+- **Training**: 2 epochs on 360,957 clean train samples (5,638 total steps, batch size 128, AdamW, LR 3e-4, 10% proportional linear warmup, cosine decay, temperature $\tau = 0.07$, CUDA AMP mixed precision, symmetric in-batch false negative mask $M_{i,j}$).
+- **Hardware & Latency**: 24.66 minutes on NVIDIA GeForce RTX 4050 Laptop GPU.
+- **MLflow Tracking**: Logged to `sqlite:///mlflow.db` under experiment `codeembed-clean-baselines` (Run ID: `3e1ae6f598c1428a9eafb016edbb7592`). Evaluation Run ID: `970a566d232d4ebb88938cc73ea1ca16`.
+- **Official Pilot Gate Evaluation (FULL 20,115 validation queries against full 20,115 clean corpus)**:
+  - **MRR**: **0.3423** (95% CI: [0.3366, 0.3480])
+  - **Recall@1**: **0.2500** (5,028 / 20,115)
+  - **Recall@5**: **0.4425** (8,901 / 20,115)
+  - **Recall@10**: **0.5194** (10,447 / 20,115)
+  - **NDCG@10**: **0.3768**
+- **1,000 Sampled Validation Queries Benchmark**:
+  - **MRR**: **0.3393** (95% CI: [0.3153, 0.3657]), Recall@1 = 0.2460, Recall@5 = 0.4380, Recall@10 = 0.5080, NDCG@10 = 0.3710.
+
+#### Direct Comparison & Modality Embedding Impact ($\Delta_{\text{modality}}$ for RQ2 on 1k Sample):
+| Metric | Clean Basic Encoder (No Modality) | Clean Shared Encoder (+ Modality Emb) | $\Delta_{\text{modality}}$ (RQ2 Impact) | BM25 Clean Val (ATIRE) |
+|---|:---:|:---:|:---:|:---:|
+| **MRR** | **0.3714** [0.3469, 0.3976] | **0.3393** [0.3153, 0.3657] | **-0.0321** (-3.21 pts) | **0.5214** [0.5152, 0.5275] |
+| **Recall@1** | **0.2820** [0.2550, 0.3100] | **0.2460** [0.2210, 0.2730] | **-0.0360** (-3.60 pts) | **0.4107** |
+| **Recall@5** | **0.4630** [0.4300, 0.4950] | **0.4380** [0.4080, 0.4670] | **-0.0250** (-2.50 pts) | **0.6515** |
+| **Recall@10** | **0.5430** [0.5100, 0.5730] | **0.5080** [0.4770, 0.5381] | **-0.0350** (-3.50 pts) | **0.7192** |
+| **NDCG@10** | **0.4042** [0.3780, 0.4310] | **0.3710** [0.3458, 0.3970] | **-0.0332** (-3.32 pts) | **0.5644** |
+
+#### Pre-Registered Overlap Stratification Breakdown on FULL Validation Split ($N=20,115$ Queries):
+| Stratum | Queries ($N$) | % Split | BM25 Val MRR | Shared Encoder MRR | Neural R@1 | Neural R@10 |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Zero-Overlap ($c = 0.0$)** | 580 | 2.88% | 0.0023 | **0.0444** | 0.0207 | 0.0741 |
+| **Low-Overlap ($0 < c \le 0.30$)** | 6,321 | 31.42% | 0.2489 | **0.2433** | 0.1604 | 0.4083 |
+| **High-Overlap ($c > 0.30$)** | 13,214 | 65.69% | **0.6745** | **0.4026** | 0.3029 | 0.5921 |
+| **OVERALL** | 20,115 | 100.00% | **0.5214** | **0.3423** | 0.2500 | 0.5194 |
+
+#### Official Pilot Gate Assessment & Fallback Grid Execution (Protocol v1.1 §3.3):
+1. **Initial Pilot Run ($3\text{e-}4, \tau = 0.07$)**:
+   - Primary Gate ($\ge 0.3910$): **0.3423** [FAIL]
+   - Alternative Low-Overlap Gate ($> 0.2489$): **0.2433** [FAIL]
+2. **Pre-Registered Capped Fallback Tuning Grid Execution (All 6 Runs)**:
+   Per protocol mandate, we executed the 6-run grid on clean validation data without ad-hoc parameter exploration:
+
+   | Rank | Configuration Tag | Learning Rate | Temp ($\tau$) | Full Val MRR | Low-Overlap MRR | Recall@1 | Recall@10 | Gate Status |
+   |:---:|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+   | **1** | **`lr_5e-4_tau_0.05`** | **$5.0\text{e-}4$** | **$0.05$** | **0.4033** | **0.2931** | **0.3038** | **0.5914** | 🟢 **PASS (Both Criteria)** |
+   | **2** | `lr_5e-4_tau_0.07` | $5.0\text{e-}4$ | $0.07$ | **0.3832** | 0.2777 | 0.2855 | 0.5692 | 🟢 Pass (Low-Overlap) |
+   | **3** | `lr_3e-4_tau_0.05` | $3.0\text{e-}4$ | $0.05$ | **0.3627** | 0.2546 | 0.2678 | 0.5462 | 🟢 Pass (Low-Overlap) |
+   | **4** | `lr_3e-4_tau_0.07` | $3.0\text{e-}4$ | $0.07$ | **0.3423** | 0.2433 | 0.2500 | 0.5194 | ❌ Fail |
+   | **5** | `lr_1e-4_tau_0.05` | $1.0\text{e-}4$ | $0.05$ | **0.2435** | 0.1542 | 0.1687 | 0.3883 | ❌ Fail |
+   | **6** | `lr_1e-4_tau_0.07` | $1.0\text{e-}4$ | $0.07$ | **0.2307** | 0.1486 | 0.1600 | 0.3701 | ❌ Fail |
+
+3. **Key Empirical & Optimization Takeaways**:
+   - **Higher LR ($5\text{e-}4$) with 10% Warmup is Essential for Cold-Start Transformers**: Training compact 4-layer encoders from scratch requires $5\text{e-}4$ to rapidly escape initial unaligned random embeddings within 2 epochs (+6.1 MRR points over $3\text{e-}4$, +16.0 MRR points over $1\text{e-}4$).
+   - **Sharper Contrastive Temperature ($\tau = 0.05$) Strictly Dominates $\tau = 0.07$**: Applying a $20\times$ logit scale consistently improves retrieval across all learning rates by +1.3 to +2.0 MRR points by penalizing challenging in-batch false negatives more severely.
+   - **Winning Configuration**: **`lr_5e-4_tau_0.05`** (Checkpoint: `checkpoints/fallback_grid/best_lr_5e-4_tau_0.05.pt`).
+   - **Gate Outcome**: **PASSES PRIMARY GATE** ($0.4033 \ge 0.3910$) and **PASSES LOW-OVERLAP GATE** ($0.2931 > 0.2489$).
+   - **Locked Standard Recipe**: $(\text{LR} = 5\text{e-}4, \tau = 0.05)$ is officially frozen and adopted across all comparison arms.
+
+### 5.6 Phase R2-C: BM25 Hard Negative Mining (Complete)
+- **Dataset**: `data/processed_clean_v2/train.parquet` (360,957 clean functions).
+- **Lexical Index**: BM25 with ATIRE negative-IDF piecewise floor (`bm25_train_index.pkl`, 196,172 vocabulary terms).
+- **Mining Engine**: Multithreaded SciPy CSR Sparse Matmul ($Q @ D_t$) across CPU worker threads via `ThreadPoolExecutor` (batch size 500 queries).
+- **Execution Latency & Throughput**:
+  - BM25 Indexing + Caching: ~1 minute.
+  - Fingerprints Precomputation (AST skeletons + 64-perm MinHash signatures): 526.7s.
+  - Sparse BLAS Mining: **130.17s** for all 360,957 queries (**2,772.9 queries/second**).
+- **3-Tier Pre-Registered False Negative Filter Efficacy**:
+  1. **Tier 1 (Identical Query Docstrings)**: **12,448** false negatives purged.
+  2. **Tier 2 (Normalized AST Skeleton with $\ge 20$ nodes)**: **5,589** syntactic clone false negatives purged.
+  3. **Tier 3 (MinHash 3-gram $J \ge 0.70$)**: **557** lexical near-duplicate false negatives purged.
+  4. **Total Purged False Negatives**: **18,594** semantic duplicates successfully prevented from corrupting contrastive gradients.
+- **Output Artifact**:
+  - Path: `data/processed_clean_v2/train_hard_negatives.pt`
+  - Shape: `(360957, 7)`, Dtype: `torch.int32`.
+  - Integrity: Verified zero self-matches ($j \ne i$), zero row duplicates, all indices within $[0, 360956]$.
+
+### 5.7 Phase R2-D: Hard-Negative Shared Encoder Retraining (Complete)
+- **Model**: `SharedEncoder` (~7.38M parameters, 4L-256d-8h-1024ff, Pre-LN, MaskedMeanPooling, learned modality embeddings `nn.Embedding(2, 256)`).
+- **Training**: 2 epochs on 360,957 clean train samples (5,638 total steps, batch size 128, AdamW, winning recipe: $\text{LR} = 5\text{e-}4, \tau = 0.05, \text{weight decay} = 0.01$, 10% proportional warmup, cosine decay).
+- **Negatives Scheme**: 1 mined BM25 hard negative (from `train_hard_negatives.pt`) + in-batch negatives per sample, with false-negative masking.
+- **Hardware & Latency**: 41.71 minutes total on NVIDIA GeForce RTX 4050 Laptop GPU (CUDA AMP).
+- **MLflow Tracking**: Logged to `sqlite:///mlflow.db` under experiment `codeembed-clean-baselines` (Run ID: `c4e2e5c02be74bf19eacf4ea4fc68c5c`). Evaluation Run ID: `c830e03c00424564b19280db5e3dd9c0`.
+- **Validation Evaluation (FULL 20,115 validation queries against full 20,115 clean corpus)**:
+  - **Overall MRR**: **0.4074** (95% CI: [0.4015, 0.4135])
+  - **Recall@1**: **0.3091** (6,218 / 20,115)
+  - **Recall@5**: **0.5166** (10,392 / 20,115)
+  - **Recall@10**: **0.5976** (12,020 / 20,115)
+  - **NDCG@10**: **0.4458**
+  - **Pre-Registered Overlap Stratification**:
+    - **Zero-Overlap (580 queries)**: Neural MRR = **0.0523** (vs BM25 **0.0023**, Recall@1 = 0.0241, Recall@10 = 0.1069)
+    - **Low-Overlap (6,321 queries)**: Neural MRR = **0.3047** (vs BM25 **0.2489**, In-Batch Shared **0.2931**, Recall@1 = 0.2080, Recall@10 = 0.4977)
+    - **High-Overlap (13,214 queries)**: Neural MRR = **0.4721** (Recall@1 = 0.3700, Recall@10 = 0.6669)
+- **1,000 Sampled Validation Benchmark**:
+  - **MRR**: **0.4116** [0.3843, 0.4390]
+  - **Recall@1**: **0.3130**
+  - **Recall@5**: **0.5260**
+  - **Recall@10**: **0.6060**
+  - **NDCG@10**: **0.4509**
+- **RQ3 Isolation ($\Delta_{\text{mining}} = \text{MRR}(\text{Hard}) - \text{MRR}(\text{In-Batch})$)**:
+  - Full Validation Overall: $\mathbf{+0.0041}$ (+0.41 MRR points: 0.4074 vs 0.4033).
+  - Low-Overlap Specific: $\mathbf{+0.0116}$ (+1.16 MRR points: 0.3047 vs 0.2931).
+  - Low-Overlap vs BM25: $\mathbf{+0.0558}$ (+5.58 MRR points over lexical retrieval).
+  - Both Pilot Gate criteria remain solidly passed.
+
+---
+
+## 6. Model Progression (Option 1: Faithful Phase-by-Phase)
+
+We adopt the phase-by-phase model hierarchy from the original [`Phases.md`](Phases.md), training from the simplest baseline upwards to isolate each architectural ingredient:
+
+```
+[Phase R1: BM25 Clean Baseline]
+   │ MRR = 0.5108 (Test), MRR = 0.5214 (Val)
+   ▼
+[Phase R2-A: Model 1 — Basic Encoder]
+   │ • BaseEncoder (~7.38M params, 4L-256d-8h-1024ff, Pre-LN, MaskedMeanPooling)
+   │ • Zero Modality Embeddings (pure unified code-text representation)
+   │ • 2 epochs on clean data (in-batch InfoNCE, τ=0.07)
+   │ • Simplest neural anchor for code search
+   ▼
+[Phase R2-B: Model 2 — Shared Encoder (Pilot Gate)]
+   │ • SharedEncoder (~7.38M params, adds learned modality embeddings)
+   │ • 2 epochs on clean data (in-batch InfoNCE, τ=0.07)
+   │ • Official Pilot Gate: Val MRR ≥ 0.3910 (or Low-Overlap Val MRR > 0.2489)
+   │ • Answers RQ2: Δ_modality = MRR(Shared) - MRR(Basic)
+   ▼
+[Phase R2-C: BM25 Hard Negative Mining]
+   │ • Multithreaded vectorized BM25 mining on clean train.parquet
+   │ • 3-tier false negative filters (docstring match, skeleton ≥ 20 nodes, MinHash J ≥ 0.70)
+   │ • Export top-50 CSR indices (train_hard_negatives.npz)
+   ▼
+[Phase R2-D: Hard-Negative Shared Encoder Retraining]
+   │ • Train Shared Encoder for 2 epochs from scratch (7 in-batch + 1 hard negative)
+   │ • Answers RQ3: Δ_mining = MRR(Hard) - MRR(In-Batch)
+   ▼
+[Phase R4: Architecture & Hyperparameter Ablations]
+   │ • Pooling: MaskedMeanPooling vs CLSPooling
+   │ • Temperature: τ ∈ {0.05, 0.07, 0.10}
+   │ • Sequence Length: L ∈ {128, 256}
+```
+
+---
+
+## 7. Division of Responsibilities & Teammate Track
+
+### 7.1 Active Track (Our Scope)
+- **Phase R2-A**: Basic Encoder (Model 1, no modality embeddings).
+- **Phase R2-B**: Shared Encoder (Model 2, learned modality embeddings + Pilot Gate).
+- **Phase R2-C**: Hard-Negative Mining on clean train data.
+- **Phase R2-D**: Hard-Negative Shared Encoder retraining from scratch.
+- **Ablations**: Pooling, temperature, sequence length.
+
+### 7.2 Teammate Track: Model 3 — Dual Encoder Baseline (Documented Handover)
+*Designated for independent execution by a teammate to investigate RQ1 (Shared vs. Dual parameter efficiency).*
+
+- **Architecture**: [`DualEncoder`](file:///d:/CODE/Projects/X/model/dual_encoder.py) (~14.76M parameters).
+  - Code Encoder: 4 Pre-LN layers, $d_{\text{model}} = 256$, 8 heads, $d_{\text{ff}} = 1024$ (~7.38M params).
+  - Query Encoder: 4 Pre-LN layers, $d_{\text{model}} = 256$, 8 heads, $d_{\text{ff}} = 1024$ (~7.38M params).
+  - Decoupled parameter spaces with zero weight sharing.
+- **Configuration**: [`configs/dual_clean.yaml`](file:///d:/CODE/Projects/X/configs/dual_clean.yaml)
+  - Data: `data/processed_clean_v2/` (`train.parquet`, `validation.parquet`, `test.parquet`).
+  - Pretokenization binary tensors auto-detected.
+  - Hyperparameters: AdamW (LR 3e-4, weight decay 0.01, 10% linear warmup, cosine decay), batch size 128, $\tau = 0.07$, 2 epochs.
+- **How Teammate Runs Dual Encoder**:
+  ```powershell
+  # 1. Activate environment
+  .venv\Scripts\Activate.ps1
+
+  # 2. Run clean in-batch dual encoder training
+  uv run python scripts/run_dual.py --config configs/dual_clean.yaml
+
+  # 3. Evaluate checkpoint on clean validation set
+  uv run python evaluation/evaluate.py --model-type dual --checkpoint checkpoints/dual_clean/best_model.pt --split validation
+  ```
+- **Comparison Objective (RQ1)**:
+  Compare Dual Encoder validation/test MRR against Shared Encoder (7.38M) to test whether parameter specialization justifies a 2× increase in model footprint (14.76M vs 7.38M) on leak-free data.
+
+---
+
+## 8. Current Status & Next Actions
+
+- **Active Branch**: `main` (clean remediation track merged and synchronized with `origin/main`).
+- **Completed Milestones**:
+  - **Phase R0**: Clean AST coordinate docstring slicing, MinHash LSH deduplication ($J \ge 0.85$), and data integrity tests (22/22 tests passing).
+  - **Phase R1**: Clean BM25 lexical baseline (ATIRE floor): Test MRR **0.5108** [0.5047, 0.5166], Val MRR **0.5214** [0.5152, 0.5275].
+  - **Phase R2-A**: Basic Encoder (no modality embeddings): Val MRR **0.3714**, Test MRR **0.3773**.
+  - **Phase R2-B**: Shared Encoder (learned modality embeddings + Pilot Gate): Full Val MRR **0.4033**, Low-Overlap **0.2931**. Passed both gate criteria.
+  - **Phase R2-C & R2-D**: BM25 Hard Negative Mining (18,594 false negatives purged via 3-tier filters) & Retraining: Full Val MRR **0.4074**, Low-Overlap **0.3047** (+5.58 pts over BM25).
+  - **Phase R2-E**: FAISS Dense Hard Negative Mining (Exploratory Iteration): 4L Shared Test MRR **0.4192** [0.4132, 0.4250] (unprotected from selection bias).
+  - **Phase R4**: Architectural Ablations: CLSPooling suffers $-61.2\%$ collapse (0.1566); SeqLen $L=128$ retains $97.8\%$ accuracy (0.3943) with $1.78\times$ speedup.
+  - **Phase R3**: Final Confirmatory Test Benchmark & Capacity Error Rubric: **Primary Protected Test Evaluation (Protocol §3)**: Shared In-batch Test MRR **0.4157**, Hard-Neg Test MRR **0.4155** (evaluated strictly once on test; +11.05 pts over BM25 on low-overlap). Scaling Gate passed at **93.0% Category B** representation error.
+  - **Phase 6.5**: Post-Protocol Exploratory Capacity Scaling (17.03M Shared Encoder, 6L-384d-6h-1536ff): 4 epochs with 1 FAISS dense hard negative. Full Val MRR **0.4620** [0.4559, 0.4679], Full Test MRR **0.4699** [0.4636, 0.4757], R@1 **0.3637**, R@10 **0.6686**, NDCG@10 **0.5109** (*Exploratory reference; unprotected from model selection bias*).
+  - **Discordance & Stratification Analysis**: Dense model crushes BM25 on zero-overlap ($7.2\times$ better, 0.0716 vs 0.0099) and low-overlap (+14.60 pts better, 0.3559 vs 0.2099). Dense wins on 37.7% of all test queries; Oracle bound combining both is **0.6562 MRR** (+14.54 pts over BM25).
+  - **Hybrid Search Benchmark (Protocol v1.1 §3)**: Official full test ($N=19,632$) fusion of BM25 (ATIRE) and CodeEmbed 17.03M Dense. **Convex Combination ($\alpha=0.7$) achieves 0.6612 Test MRR** [0.6555, 0.6670] (exceeding even the naive oracle bound!), R@1 **0.5596**, R@10 **0.8392**, NDCG@10 **0.7008**. **RRF ($k=20$) achieves 0.6291 Test MRR** [0.6234, 0.6347], and standard RRF ($k=60$) achieves **0.6218 Test MRR**. Paired bootstrap statistical significance tests confirm overwhelming superiority: $\Delta\text{MRR} = +0.1504$ over BM25 ($p < 0.0001$) and $+0.1914$ over Dense ($p < 0.0001$).
+- **Completed Core Milestones**:
+  1. **Hybrid Search Benchmark**: Complete (`benchmarks/hybrid_benchmark_results.json`, MLflow run `hybrid-benchmark-clean`).
+  2. **Phase 8 Web & CLI Demo**: Complete (`demo/app.py`, `demo/search.py`).
+
+
+

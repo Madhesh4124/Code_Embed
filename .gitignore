@@ -13,20 +13,20 @@ ENV/
 # Data & Datasets
 data/raw/
 data/processed/
-data/processed_clean_v2/
-*.parquet
+data/processed_clean_v2/*
+!data/processed_clean_v2/test_stratified.parquet
 *.jsonl
 *.csv
 
 # Model Checkpoints & Indices
-checkpoints/
-*.pt
-*.pth
-*.bin
-*.npy
+checkpoints/*
+!checkpoints/shared_6l_dense_clean/
+checkpoints/shared_6l_dense_clean/*
+!checkpoints/shared_6l_dense_clean/model_weights_only.pt
 indices/
 *.faiss
-data/cache/
+data/cache/*
+!data/cache/corpus_emb_shared_6l.npy
 
 # Experiment Tracking
 mlruns/
@@ -39,3 +39,4 @@ mlflow.db
 
 # Environment variables
 .env
+.opencode
