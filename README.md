@@ -30,34 +30,13 @@ Evaluated **strictly once** on the clean, uncorrupted test split ($N = 19,632$ q
 
 ---
 
-## 🖥️ Interactive Demo & Sample UI Placeholder
+## 🖥️ Interactive Search & Visual Research Dashboard
 
-CodeEmbed provides an interactive semantic retrieval interface to search the CodeSearchNet Python codebase in real time.
+CodeEmbed provides an interactive semantic retrieval interface to search the 19,632 CodeSearchNet test functions in real time using the from-scratch bi-encoder, BM25, or hybrid fusion.
 
-```
-========================================================================================================
-                                     CodeEmbed — Semantic Code Search
-========================================================================================================
-Query: "convert timestamp string to unix epoch milliseconds"
-Retriever: [Hybrid: Dense (17M) + BM25]  |  Corpus: 19,632 Python Functions  |  Device: CUDA (RTX 4050)
---------------------------------------------------------------------------------------------------------
-[Rank 1] Score: 0.8942 | Match Type: Semantic Discovery | Latency: 11.2ms
-Function: date_utils.parse_timestamp_millis(ts_str: str) -> int
-Repo: apache/airflow | File: airflow/utils/dates.py
-Snippet:
-    def parse_timestamp_millis(ts_str: str) -> int:
-        dt = dateutil.parser.isoparse(ts_str)
-        return int(dt.timestamp() * 1000)
---------------------------------------------------------------------------------------------------------
-[Rank 2] Score: 0.8415 | Match Type: Lexical & Dense Overlap | Latency: 11.2ms
-Function: time_helpers.to_epoch_ms(val)
-Repo: pallets/flask | File: flask/helpers.py
-========================================================================================================
-```
+### 🌟 Streamlit Web Application (Cloud-Ready)
 
-### 🖼️ Interactive Research Dashboard & Streamlit Cloud App
-
-CodeEmbed features a production-ready, interactive visual research dashboard built with **Streamlit** and **Plotly** (hardware-accelerated WebGL `go.Scattergl`), optimized for one-click deployment to **Streamlit Community Cloud**:
+Built with **Streamlit** and **Plotly** (hardware-accelerated WebGL `go.Scattergl`), featuring live interactive diagnostics:
 
 ```bash
 # Launch interactive Streamlit research dashboard
@@ -65,39 +44,25 @@ uv run streamlit run streamlit_app.py
 # Opens immediately on http://localhost:8501
 ```
 
-#### 🌟 Key Diagnostic Features:
+#### Key Diagnostic Features:
 1. **⚖️ Hybrid Score Decomposition Waterfall**: Horizontal stacked percentage bars dissecting candidate scores into **Neural Dense (Semantic)** vs. **Lexical BM25 (Exact Token)** contributions.
-2. **💎 Token-Level Attribution & Zero-Overlap Callout**: Highlights matching query tokens inside the code body. When a query shares **zero tokens** with the retrieved code, displays an explicit **Pure Semantic Generalization** badge proving dense bi-encoder success where BM25 fails completely.
+2. **💎 Token-Level Attribution & Zero-Overlap Callout**: Highlights matching query tokens inside the code body. When a query shares **zero tokens** with the retrieved code, surfaces an explicit **Pure Semantic Generalization** badge proving dense bi-encoder success where BM25 fails completely.
 3. **🗺️ 2D Latent Semantic Space Map (PCA)**: Pre-computed 2D projection of all 19,632 test functions with **real-time query projection**, glowing query marker, ranked neighbor clusters, and cosine distance vectors.
 4. **🎯 BM25 vs. Dense Discordance Quadrant Plot**: Dynamic candidate scatter plot across normalized BM25 vs. normalized Dense cosine similarity, with shaded quadrants (Consensus Sweet Spot, Pure Semantic Gems, Lexical Keyword Matches, and Fringe Noise).
 5. **🎯 Pre-Loaded Authentic Test Split Queries**: Direct dropdown selection of verified test set queries from `test_stratified.parquet` across Zero, Low, and High overlap strata.
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ ⚡ CodeEmbed Research Search Engine                                       [⚡ GPU Active]│
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ 🎯 Select Test Query: [ 💎 Converts a string to a valid filename.                    ] │
-│ 🔎 Query Input:       [ Converts a string to a valid filename.                       ] │
-│ Architecture:         (•) CodeEmbed 6L (17M)  ( ) CodeEmbed 4L (7M)  ( ) MiniLM (22M)  │
-│ Mode:                 (•) Convex Hybrid (α=0.7)  ( ) RRF (k=20)  ( ) Dense  ( ) BM25   │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ Results:                                                                               │
-│ 🥇 Rank #1: legitimize(string) | Score: 0.8841 | Stratum: 💎 Zero-Overlap (J=0.00)     │
-│    [Neural Dense: 78.4% | Lexical BM25: 21.6%]                                         │
-│    💎 Pure Semantic Generalization: 0 shared tokens between query and code!            │
-│    def legitimize(string):                                                             │
-│        return "".join(c for c in string if c.isalnum() or c in (' ', '.', '_')).rstrip()│
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
+### 💻 Command-Line & REST Interfaces
 
-#### Alternative Interfaces:
 ```bash
-# FastAPI Web UI + Tailwind Interface
-uv run python demo/app.py
-# Open http://127.0.0.1:8000
-
-# Terminal Interactive REPL Engine
+# Terminal Interactive Search REPL
 uv run python demo/search.py --interactive
+
+# Single-shot query execution
+uv run python demo/search.py --query "Converts a string to a valid filename." --mode hybrid --top-k 5
+
+# FastAPI Backend & Web UI
+uv run python demo/app.py
+# Access http://localhost:8000
 ```
 
 
